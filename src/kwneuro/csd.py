@@ -14,6 +14,8 @@ from dipy.reconst.csdeconv import (
 )
 from dipy.reconst.shm import convert_sh_descoteaux_tournier
 
+from kwneuro.cache import CacheSpec, cacheable
+from kwneuro.io import NiftiVolumeResource
 from kwneuro.resource import (
     InMemoryResponseFunctionResource,
     ResponseFunctionResource,
@@ -84,6 +86,7 @@ def combine_response_functions(
     )
 
 
+@cacheable
 def estimate_response_function(
     dwi: Dwi,
     mask: VolumeResource,
@@ -204,6 +207,19 @@ def compute_csd_fods(
     return coeffs
 
 
+@cacheable(
+    CacheSpec(
+        files=["csd_peak_dirs.nii.gz", "csd_peak_values.nii.gz"],
+        save=lambda result, d: (
+            NiftiVolumeResource.save(result[0], d / "csd_peak_dirs.nii.gz"),
+            NiftiVolumeResource.save(result[1], d / "csd_peak_values.nii.gz"),
+        ),
+        load=lambda d: (
+            NiftiVolumeResource(d / "csd_peak_dirs.nii.gz"),
+            NiftiVolumeResource(d / "csd_peak_values.nii.gz"),
+        ),
+    )
+)
 def compute_csd_peaks(
     dwi: Dwi,
     mask: VolumeResource,
@@ -260,18 +276,18 @@ def compute_csd_peaks(
         npeaks=n_peaks,
     )
 
-    peak_dirs = create_estimate_volume_resource(
-        array=csd_peaks.peak_dirs,
-        reference_volume=dwi.volume,
-        intent_name="CSD_PEAK_DIRS",
+    return (
+        create_estimate_volume_resource(
+            array=csd_peaks.peak_dirs,
+            reference_volume=dwi.volume,
+            intent_name="CSD_PEAK_DIRS",
+        ),
+        create_estimate_volume_resource(
+            array=csd_peaks.peak_values,
+            reference_volume=dwi.volume,
+            intent_name="CSD_PEAK_VALS",
+        ),
     )
-    peak_values = create_estimate_volume_resource(
-        array=csd_peaks.peak_values,
-        reference_volume=dwi.volume,
-        intent_name="CSD_PEAK_VALS",
-    )
-
-    return (peak_dirs, peak_values)
 
 
 def combine_csd_peaks_to_vector_volume(
