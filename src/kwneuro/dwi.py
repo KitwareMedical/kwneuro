@@ -8,6 +8,7 @@ from pathlib import Path
 import dipy.core.gradients
 import numpy as np
 
+from kwneuro.cache import cacheable
 from kwneuro.denoise import denoise_dwi
 from kwneuro.dti import Dti
 from kwneuro.io import FslBvalResource, FslBvecResource, NiftiVolumeResource
@@ -59,6 +60,25 @@ class Dwi:
             volume=self.volume.load(),
             bval=self.bval.load(),
             bvec=self.bvec.load(),
+        )
+
+    # ------------------------------------------------------------------
+    # Cache protocol
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def _cache_files(cls, step_name: str) -> list[str]:
+        return [f"{step_name}.nii.gz", f"{step_name}.bval", f"{step_name}.bvec"]
+
+    def _cache_save(self, cache_dir: Path, step_name: str) -> None:
+        self.save(cache_dir, step_name)
+
+    @classmethod
+    def _cache_load(cls, cache_dir: Path, step_name: str) -> Dwi:
+        return cls(
+            NiftiVolumeResource(cache_dir / f"{step_name}.nii.gz"),
+            FslBvalResource(cache_dir / f"{step_name}.bval"),
+            FslBvecResource(cache_dir / f"{step_name}.bvec"),
         )
 
     def save(self, path: PathLike, basename: str) -> Dwi:
@@ -244,3 +264,7 @@ def subsample_dwi(dwi: Dwi, factor: int = 2) -> Dwi:
         bval=dwi.bval,
         bvec=dwi.bvec,
     )
+
+
+Dwi.denoise = cacheable(Dwi.denoise)
+Dwi.extract_brain = cacheable(Dwi.extract_brain)
