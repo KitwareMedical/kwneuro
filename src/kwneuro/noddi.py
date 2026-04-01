@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from kwneuro.cache import cacheable
 from kwneuro.io import FslBvalResource, FslBvecResource, NiftiVolumeResource
 from kwneuro.resource import InMemoryVolumeResource, VolumeResource
 from kwneuro.util import (
@@ -37,6 +38,25 @@ class Noddi:
         """Load any on-disk resources into memory and return a DTI with all loadable resources loaded."""
         return Noddi(volume=self.volume.load(), directions=self.directions.load())
 
+    # ------------------------------------------------------------------
+    # Cache protocol
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def _cache_files(cls, step_name: str) -> list[str]:
+        return ["noddi.nii.gz", "noddi_directions.nii.gz"]
+
+    def _cache_save(self, cache_dir: Path, step_name: str) -> None:
+        NiftiVolumeResource.save(self.volume, cache_dir / "noddi.nii.gz")
+        NiftiVolumeResource.save(self.directions, cache_dir / "noddi_directions.nii.gz")
+
+    @classmethod
+    def _cache_load(cls, cache_dir: Path, step_name: str) -> Noddi:
+        return cls(
+            NiftiVolumeResource(cache_dir / "noddi.nii.gz"),
+            NiftiVolumeResource(cache_dir / "noddi_directions.nii.gz"),
+        )
+
     def save(self, path: PathLike) -> Noddi:
         """Save all resources to disk and return a Noddi with all resources being on-disk.
 
@@ -57,6 +77,7 @@ class Noddi:
         )
 
     @staticmethod
+    @cacheable
     def estimate_from_dwi(
         dwi: Dwi,
         mask: VolumeResource | None = None,
