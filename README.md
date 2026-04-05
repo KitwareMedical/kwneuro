@@ -104,14 +104,15 @@ noddi.save("output/noddi.nii.gz")
 
 ## Example notebooks
 
-The [`notebooks/`](notebooks/) directory contains Jupytext notebooks you can run
-end-to-end:
+The
+[`notebooks/`](https://github.com/brain-microstructure-exploration-tools/kwneuro/tree/main/notebooks)
+directory contains Jupytext notebooks you can run end-to-end:
 
-- **[example-pipeline.py](notebooks/example-pipeline.py)** -- Single-subject
-  walkthrough: loading, denoising, brain extraction, DTI, NODDI, CSD, and
-  TractSeg.
-- **[example-group-template.py](notebooks/example-group-template.py)** --
-  Multi-subject FA/MD template construction using iterative registration.
+- **[example-pipeline.py](https://github.com/brain-microstructure-exploration-tools/kwneuro/blob/main/notebooks/example-pipeline.py)**
+  -- Single-subject walkthrough: loading, denoising, brain extraction, DTI,
+  NODDI, CSD, and TractSeg.
+- **[example-group-template.py](https://github.com/brain-microstructure-exploration-tools/kwneuro/blob/main/notebooks/example-group-template.py)**
+  -- Multi-subject FA/MD template construction using iterative registration.
 
 ## Contributing
 
@@ -130,8 +131,9 @@ uv run pytest
 uv run ruff check .
 ```
 
-See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for the full guide, including a
-non-uv setup option.
+See
+[CONTRIBUTING.md](https://github.com/brain-microstructure-exploration-tools/kwneuro/blob/main/.github/CONTRIBUTING.md)
+for the full guide, including a non-uv setup option.
 
 See the [GitHub Discussions][github-discussions-link] for questions and ideas,
 or open an
