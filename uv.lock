@@ -2692,6 +2692,7 @@ dependencies = [
     { name = "dipy", version = "1.12.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "dmri-amico" },
     { name = "hd-bet" },
+    { name = "neurocombat" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "numpy", version = "2.3.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "pandas", version = "2.3.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -2747,6 +2748,7 @@ requires-dist = [
     { name = "kwneuro", extras = ["test"], marker = "extra == 'dev'" },
     { name = "matplotlib", marker = "extra == 'notebooks'" },
     { name = "myst-parser", marker = "extra == 'docs'", specifier = ">=0.13" },
+    { name = "neurocombat", specifier = "==0.2.12" },
     { name = "notebook", marker = "extra == 'notebooks'" },
     { name = "numpy", specifier = "<2.4" },
     { name = "pandas" },
@@ -3484,6 +3486,12 @@ sdist = { url = "https://files.pythonhosted.org/packages/6a/51/63fe664f3908c97be
 wheels = [
     { url = "https://files.pythonhosted.org/packages/9e/c9/b2622292ea83fbb4ec318f5b9ab867d0a28ab43c5717bb85b0a5f6b3b0a4/networkx-3.6.1-py3-none-any.whl", hash = "sha256:d47fbf302e7d9cbbb9e2555a0d267983d2aa476bac30e90dfbe5669bd57f3762", size = 2068504, upload-time = "2025-12-08T17:02:38.159Z" },
 ]
+
+[[package]]
+name = "neurocombat"
+version = "0.2.12"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/af/e4/ca7af7aaf09b34702ef1f2a5e6afd5105b89c01a09f323ac60af429ef8b4/neuroCombat-0.2.12.tar.gz", hash = "sha256:dfba419ec1a251f4142a3705a1567e5a3b9589dc39ca93a57669cda09c954caa", size = 6191, upload-time = "2021-05-18T16:25:17.511Z" }
 
 [[package]]
 name = "nibabel"

@@ -89,16 +89,17 @@ noddi.save("output/noddi.nii.gz")
 
 ## What's included
 
-| Capability             | What it does                                                      | Powered by |
-| ---------------------- | ----------------------------------------------------------------- | ---------- |
-| **Denoising**          | Patch2Self self-supervised denoising                              | DIPY       |
-| **Brain extraction**   | Deep-learning brain masking from mean b=0                         | HD-BET     |
-| **DTI**                | Tensor fitting, FA, MD, eigenvalue decomposition                  | DIPY       |
-| **NODDI**              | Neurite density, orientation dispersion, free water fraction      | AMICO      |
-| **CSD**                | Fiber orientation distributions and peak extraction               | DIPY       |
-| **Tract segmentation** | 72 white-matter bundles from CSD peaks                            | TractSeg   |
-| **Registration**       | Pairwise registration (rigid, affine, SyN)                        | ANTs       |
-| **Template building**  | Iterative unbiased population templates (single- or multi-metric) | ANTs       |
+| Capability             | What it does                                                      | Powered by  |
+| ---------------------- | ----------------------------------------------------------------- | ----------- |
+| **Denoising**          | Patch2Self self-supervised denoising                              | DIPY        |
+| **Brain extraction**   | Deep-learning brain masking from mean b=0                         | HD-BET      |
+| **DTI**                | Tensor fitting, FA, MD, eigenvalue decomposition                  | DIPY        |
+| **NODDI**              | Neurite density, orientation dispersion, free water fraction      | AMICO       |
+| **CSD**                | Fiber orientation distributions and peak extraction               | DIPY        |
+| **Tract segmentation** | 72 white-matter bundles from CSD peaks                            | TractSeg    |
+| **Registration**       | Pairwise registration (rigid, affine, SyN)                        | ANTs        |
+| **Template building**  | Iterative unbiased population templates (single- or multi-metric) | ANTs        |
+| **Harmonization**      | ComBat site-effect removal for multi-site scalar maps             | neuroCombat |
 
 <!-- GETTING-STARTED-END -->
 
@@ -113,6 +114,8 @@ directory contains Jupytext notebooks you can run end-to-end:
   NODDI, CSD, and TractSeg.
 - **[example-group-template.py](https://github.com/brain-microstructure-exploration-tools/kwneuro/blob/main/notebooks/example-group-template.py)**
   -- Multi-subject FA/MD template construction using iterative registration.
+- **[example-harmonization.py](https://github.com/brain-microstructure-exploration-tools/kwneuro/blob/main/notebooks/example-harmonization.py)**
+  -- ComBat harmonization of multi-site scalar maps.
 
 ## Contributing
 
