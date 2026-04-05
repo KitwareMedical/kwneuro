@@ -61,6 +61,41 @@ def update_volume_metadata(
     return dict(header)
 
 
+def subsample_volume(volume: VolumeResource, factor: int = 2) -> InMemoryVolumeResource:
+    """Spatially subsample a volume by taking every Nth voxel along each spatial axis.
+
+    This is stride-based subsampling (not interpolated resampling).  It is mainly
+    useful for quickly reducing resolution in demo notebooks so that expensive
+    downstream steps run faster.
+
+    Args:
+        volume: The volume to subsample.
+        factor: Take every *factor*-th voxel along each of the first three
+            (spatial) dimensions.  Extra dimensions are left untouched.
+
+    Returns:
+        A new InMemoryVolumeResource with the subsampled data and an
+        updated affine that reflects the coarser voxel grid.
+    """
+    loaded = volume.load()
+    arr = loaded.get_array()
+    affine = loaded.get_affine()
+
+    slices: tuple[slice, ...] = (slice(None, None, factor),) * 3
+    if arr.ndim > 3:
+        slices = slices + (slice(None),) * (arr.ndim - 3)
+    new_arr = arr[slices]
+
+    new_affine = affine.copy()
+    new_affine[:3, :3] *= factor
+
+    return InMemoryVolumeResource(
+        array=new_arr,
+        affine=new_affine,
+        metadata=update_volume_metadata(loaded.get_metadata(), new_arr),
+    )
+
+
 def deep_equal_allclose(obj1: Any, obj2: Any) -> bool:
     """
     Recursively compares two objects, including nested lists, tuples,
