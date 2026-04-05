@@ -111,19 +111,23 @@ end-to-end:
 
 ## Contributing
 
-Contributions are welcome! To set up a dev environment:
+Contributions are welcome! Set up a dev environment with
+[uv](https://docs.astral.sh/uv/):
 
 ```bash
-pip install -e ".[dev]"
-pre-commit install
+uv sync --extra dev
+uv run pre-commit install
 ```
 
 Run the tests and linter:
 
 ```bash
-pytest
-ruff check .
+uv run pytest
+uv run ruff check .
 ```
+
+See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for the full guide, including a
+non-uv setup option.
 
 See the [GitHub Discussions][github-discussions-link] for questions and ideas,
 or open an

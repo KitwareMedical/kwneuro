@@ -50,10 +50,9 @@ test = [
   "pytest-mock >=3.14",
 ]
 dev = [
-  "pytest >=6",
-  "pytest-cov >=3",
-  "pytest-mock >=3.14",
+  "kwneuro[test]",
   "pre-commit",
+  "pylint",
 ]
 notebooks = [
   "matplotlib",
@@ -164,7 +163,6 @@ isort.required-imports = ["from __future__ import annotations"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["T20"]
-"noxfile.py" = ["T20"]
 
 
 [tool.pylint]
