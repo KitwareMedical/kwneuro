@@ -17,64 +17,69 @@ broader diffusion MRI use. Source code lives under `src/kwneuro/`.
 
 ## Development Commands
 
+All commands use [uv](https://docs.astral.sh/uv/). The project has a committed
+`uv.lock` for reproducible installs.
+
 ### Setup
 
 ```bash
 # Install in editable mode with dev dependencies
-pip install -e ".[dev]"
+uv sync --extra dev
 
 # Install pre-commit hooks
-pre-commit install
+uv run pre-commit install
 ```
 
 ### Testing
 
 ```bash
 # Run all tests
-pytest
+uv run pytest
 
 # Run with coverage
-pytest --cov
+uv run pytest --cov
 
 # Run a single test file
-pytest tests/test_dwi.py
+uv run pytest tests/test_dwi.py
 
 # Run a specific test
-pytest tests/test_dwi.py::test_dwi_load
+uv run pytest tests/test_dwi.py::test_dwi_load
 ```
 
 ### Code Quality
 
 ```bash
-# Run pre-commit checks manually (ruff, mypy, etc.)
-pre-commit run --all-files
+# Run pre-commit checks (ruff, mypy, etc.) — fast
+uv run pre-commit run --all-files
+
+# Run PyLint — thorough, slow
+uv run pylint kwneuro
 
 # Ruff linting
-ruff check .
+uv run ruff check .
 
 # Ruff formatting
-ruff format .
+uv run ruff format .
 
 # Type checking with mypy
-mypy src tests
+uv run mypy src tests
 ```
 
 ### Documentation
 
 ```bash
 # Build docs
-cd docs
-make html
+uv run --extra docs sphinx-build -n -T docs docs/_build/html
 
 # Live rebuild docs
-sphinx-autobuild docs docs/_build/html
+uv run --extra docs sphinx-autobuild -n -T docs docs/_build/html
 ```
 
 ### Package Build
 
 ```bash
 # Build distribution
-python -m build
+uv build
 
 # Version is managed by setuptools_scm based on git tags
 ```
