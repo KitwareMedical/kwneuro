@@ -6,13 +6,29 @@ CI linting.
 
 ## Running a notebook
 
-Install Jupytext, then open the `.py` file as a notebook:
+Install the notebook dependencies with
+[uv](https://docs.astral.sh/uv/getting-started/installation/), then open a
+notebook:
 
-```bash
-pip install jupytext
-jupytext --to notebook example-pipeline.py   # creates example-pipeline.ipynb
-jupyter notebook example-pipeline.ipynb
+```console
+$ uv sync --extra notebooks
+$ cd notebooks
+$ uv run jupytext --to notebook example-pipeline.py
+$ uv run jupyter notebook example-pipeline.ipynb
 ```
 
 Or, if you have Jupytext's Jupyter extension enabled, simply open the `.py` file
-directly in Jupyter.
+directly in Jupyter:
+
+```console
+$ uv run jupyter notebook example-pipeline.py
+```
+
+### Without uv
+
+```bash
+pip install -e ".[notebooks]"
+cd notebooks
+jupytext --to notebook example-pipeline.py
+jupyter notebook example-pipeline.ipynb
+```

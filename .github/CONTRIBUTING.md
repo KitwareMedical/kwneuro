@@ -5,98 +5,76 @@ description of best practices for developing scientific packages.
 
 # Quick development
 
-The fastest way to start with development is to use nox. If you don't have nox,
-you can use `pipx run nox` to run it without installing, or `pipx install nox`.
-If you don't have pipx (pip for applications), then you can install with
-`pip install pipx` (the only case where installing an application with regular
-pip is reasonable). If you use macOS, then pipx and nox are both in brew, use
-`brew install pipx nox`.
-
-To use, run `nox`. This will lint and test using every installed version of
-Python on your system, skipping ones that are not installed. You can also run
-specific jobs:
+The recommended way to develop kwneuro is with [uv](https://docs.astral.sh/uv/).
+Install uv following the
+[official instructions](https://docs.astral.sh/uv/getting-started/installation/),
+then clone the repo and sync:
 
 ```console
-$ nox -s lint  # Lint only
-$ nox -s tests  # Python tests
-$ nox -s docs -- --serve  # Build and serve the docs
-$ nox -s build  # Make an SDist and wheel
+$ git clone https://github.com/brain-microstructure-exploration-tools/kwneuro.git
+$ cd kwneuro
+$ uv sync --extra dev
 ```
 
-Nox handles everything for you, including setting up an temporary virtual
-environment for each run.
+This creates a virtual environment under `.venv/`, installs kwneuro in editable
+mode with all development dependencies, and respects the committed `uv.lock` for
+reproducible installs.
 
-# Setting up a development environment manually
+Common tasks:
 
-You can set up a development environment by running:
+```console
+$ uv run pytest                            # Run tests
+$ uv run pytest --cov=kwneuro              # Run tests with coverage
+$ uv run pre-commit run --all-files        # Format + fast lint
+$ uv run pylint kwneuro                    # Thorough lint (slow)
+```
+
+# Setting up without uv
+
+You can also set up a development environment with plain pip:
 
 ```bash
 python3 -m venv .venv
 source ./.venv/bin/activate
-pip install --upgrade pip
-pip install -v -e .[dev]
-```
-
-If you have the
-[Python Launcher for Unix](https://github.com/brettcannon/python-launcher), you
-can instead do:
-
-```bash
-py -m venv .venv
-py -m install -v -e .[dev]
-```
-
-# Post setup
-
-You should prepare pre-commit, which will help you by checking that commits pass
-required checks:
-
-```bash
-pip install pre-commit # or brew install pre-commit on macOS
-pre-commit install # Will install a pre-commit hook into the git repo
-```
-
-You can also/alternatively run `pre-commit run` (changes only) or
-`pre-commit run --all-files` to check even without installing the hook.
-
-# Testing
-
-Use pytest to run the unit checks:
-
-```bash
-pytest
-```
-
-# Coverage
-
-Use pytest-cov to generate coverage reports:
-
-```bash
-pytest --cov=kwneuro
-```
-
-# Building docs
-
-You can build the docs using:
-
-```bash
-nox -s build_api_docs docs
-```
-
-You can see a preview with:
-
-```bash
-nox -s build_api_docs docs -- --serve
+pip install -e ".[dev]"
 ```
 
 # Pre-commit
 
-This project uses pre-commit for all style checking. While you can run it with
-nox, this is such an important tool that it deserves to be installed on its own.
-Install pre-commit and run:
+This project uses pre-commit for all style checking. Install the hook so it runs
+automatically on each commit:
 
-```bash
-pre-commit run -a
+```console
+$ uv run pre-commit install
 ```
 
-to check all files.
+You can also run it manually:
+
+```console
+$ uv run pre-commit run --all-files
+```
+
+# Testing
+
+```console
+$ uv run pytest
+```
+
+# Coverage
+
+```console
+$ uv run pytest --cov=kwneuro
+```
+
+# Building docs
+
+```console
+$ uv run --extra docs sphinx-apidoc -o docs --separate --module-first -d 2 --force src
+$ uv run --extra docs sphinx-build -n -T docs docs/_build/html
+```
+
+To live-preview while editing:
+
+```console
+$ uv run --extra docs sphinx-autobuild -n -T docs docs/_build/html
+```
