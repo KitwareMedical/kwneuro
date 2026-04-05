@@ -25,6 +25,7 @@ from kwneuro.util import (
     PathLike,
     deep_equal_allclose,
     normalize_path,
+    subsample_volume,
     update_volume_metadata,
 )
 
@@ -230,3 +231,16 @@ class Dwi:
     ) -> Noddi:
         """Estimate NODDI model parameters from this DWI. See :meth:`kwneuro.noddi.Noddi.estimate_from_dwi` for details."""
         return Noddi.estimate_from_dwi(self, mask, dpar, n_kernel_dirs)
+
+
+def subsample_dwi(dwi: Dwi, factor: int = 2) -> Dwi:
+    """Spatially subsample a DWI by taking every Nth voxel along each spatial axis.
+
+    Convenience wrapper around :func:`kwneuro.util.subsample_volume` that returns a new
+    Dwi with the subsampled volume and the original b-values and b-vectors.
+    """
+    return Dwi(
+        volume=subsample_volume(dwi.volume, factor),
+        bval=dwi.bval,
+        bvec=dwi.bvec,
+    )
