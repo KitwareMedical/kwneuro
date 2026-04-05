@@ -1,62 +1,105 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from unittest.mock import MagicMock
 
+import nibabel as nib
+import numpy as np
 import pytest
+from scipy.linalg import expm
 
 from kwneuro.cache import (
-    CacheSpec,
     PipelineCache,
     _active_cache,
     cacheable,
 )
+from kwneuro.csd import compute_csd_peaks
+from kwneuro.dti import Dti
+from kwneuro.dwi import Dwi
+from kwneuro.noddi import Noddi
+from kwneuro.resource import (
+    InMemoryBvalResource,
+    InMemoryBvecResource,
+    InMemoryVolumeResource,
+)
 
 
-class FakeResource:
-    """Minimal in-memory resource with a cache protocol."""
-
-    def __init__(self, value: int) -> None:
-        self.value = value
-
-    @classmethod
-    def _cache_files(cls, step_name: str) -> list[str]:
-        return [f"{step_name}.fake"]
-
-    def _cache_save(self, cache_dir: Path, step_name: str) -> None:
-        (cache_dir / f"{step_name}.fake").write_text(str(self.value))
-
-    @classmethod
-    def _cache_load(cls, cache_dir: Path, step_name: str) -> FakeResource:
-        val = int((cache_dir / f"{step_name}.fake").read_text())
-        return cls(val)
+@pytest.fixture
+def random_affine() -> np.ndarray:
+    rng = np.random.default_rng(18653)
+    affine = np.eye(4)
+    affine[:3, :3] = expm((lambda A: (A - A.T) / 2)(rng.normal(size=(3, 3))))
+    affine[:3, 3] = rng.random(3)
+    return affine
 
 
-class NoCacheProtocol:
-    """Stub without a cache protocol — should trigger TypeError."""
+@pytest.fixture
+def small_nifti_header():
+    hdr = nib.Nifti1Header()
+    hdr["descrip"] = b"an kwneuro unit test header description"
+    return hdr
 
 
-# Exmaple cacheable function
-@cacheable
-def compute_fake(x: int, multiplier: int = 2) -> FakeResource:
-    return FakeResource(x * multiplier)
+@pytest.fixture
+def dwi3(random_affine, small_nifti_header) -> Dwi:
+    """An example in-memory Dwi with 6 volumes, 3 of which have b=0"""
+    n_vols = 6
+    rng = np.random.default_rng(7816)
+    bvec_array = rng.random(size=(n_vols, 3), dtype=np.float32)
+    bvec_array = bvec_array / np.sqrt((bvec_array**2).sum(axis=1, keepdims=True))
+    return Dwi(
+        volume=InMemoryVolumeResource(
+            array=rng.random(size=(3, 4, 5, n_vols), dtype=np.float32),
+            affine=random_affine,
+            metadata=dict(small_nifti_header),
+        ),
+        bval=InMemoryBvalResource(array=np.array([0, 1000, 3000, 0, 0, 2000])),
+        bvec=InMemoryBvecResource(array=bvec_array),
+    )
 
 
-class TestIsForced:
-    def test_false(self, tmp_path: Path) -> None:
-        pc = PipelineCache(tmp_path, force=False)
-        assert not pc.is_forced("any_step")
+@pytest.fixture
+def dwi4(random_affine, small_nifti_header) -> Dwi:
+    """An example in-memory Dwi with 10 volumes."""
+    n_vols = 10
+    rng = np.random.default_rng(4616)
+    bvec_array = rng.random(size=(n_vols, 3), dtype=np.float32)
+    bvec_array = bvec_array / np.sqrt((bvec_array**2).sum(axis=1, keepdims=True))
+    return Dwi(
+        volume=InMemoryVolumeResource(
+            array=rng.random(size=(3, 4, 5, n_vols), dtype=np.float32),
+            affine=random_affine,
+            metadata=dict(small_nifti_header),
+        ),
+        bval=InMemoryBvalResource(array=rng.integers(0, 3000, n_vols).astype(float)),
+        bvec=InMemoryBvecResource(array=bvec_array),
+    )
 
-    def test_true(self, tmp_path: Path) -> None:
-        pc = PipelineCache(tmp_path, force=True)
-        assert pc.is_forced("any_step")
 
-    def test_set_match(self, tmp_path: Path) -> None:
-        pc = PipelineCache(tmp_path, force={"step_a"})
-        assert pc.is_forced("step_a")
+# ---------------------------------------------------------------------------
+# PipelineCache.is_forced
+# ---------------------------------------------------------------------------
 
-    def test_set_no_match(self, tmp_path: Path) -> None:
-        pc = PipelineCache(tmp_path, force={"step_b"})
-        assert not pc.is_forced("step_a")
+
+def test_is_forced_false(tmp_path: Path) -> None:
+    pc = PipelineCache(tmp_path, force=False)
+    assert not pc.is_forced("any_step")
+
+
+def test_is_forced_true(tmp_path: Path) -> None:
+    pc = PipelineCache(tmp_path, force=True)
+    assert pc.is_forced("any_step")
+
+
+def test_is_forced_set_match(tmp_path: Path) -> None:
+    pc = PipelineCache(tmp_path, force={"step_a"})
+    assert pc.is_forced("step_a")
+
+
+def test_is_forced_set_no_match(tmp_path: Path) -> None:
+    pc = PipelineCache(tmp_path, force={"step_b"})
+    assert not pc.is_forced("step_a")
 
 
 # ---------------------------------------------------------------------------
@@ -64,41 +107,41 @@ class TestIsForced:
 # ---------------------------------------------------------------------------
 
 
-class TestIsCached:
-    def test_missing_file(self, tmp_path: Path) -> None:
-        pc = PipelineCache(tmp_path)
-        assert not pc.is_cached("step", ["missing.txt"])
+def test_is_cached_missing_file(tmp_path: Path) -> None:
+    pc = PipelineCache(tmp_path)
+    assert not pc.is_cached("step", ["missing.txt"])
 
-    def test_all_files_present(self, tmp_path: Path) -> None:
-        (tmp_path / "out.txt").write_text("x")
-        pc = PipelineCache(tmp_path, force=False)
-        assert pc.is_cached("step", ["out.txt"])
 
-    def test_forced_overrides_present(self, tmp_path: Path) -> None:
-        (tmp_path / "out.txt").write_text("x")
-        pc = PipelineCache(tmp_path, force=True)
-        assert not pc.is_cached("step", ["out.txt"])
+def test_is_cached_all_files_present(tmp_path: Path) -> None:
+    (tmp_path / "out.txt").write_text("x")
+    pc = PipelineCache(tmp_path, force=False)
+    assert pc.is_cached("step", ["out.txt"])
 
-    def test_params_match(self, tmp_path: Path) -> None:
-        (tmp_path / "out.txt").write_text("x")
-        import json
 
-        (tmp_path / "step.params.json").write_text(json.dumps({"x": 1}, sort_keys=True))
-        pc = PipelineCache(tmp_path)
-        assert pc.is_cached("step", ["out.txt"], params={"x": 1})
+def test_is_cached_forced_overrides_present(tmp_path: Path) -> None:
+    (tmp_path / "out.txt").write_text("x")
+    pc = PipelineCache(tmp_path, force=True)
+    assert not pc.is_cached("step", ["out.txt"])
 
-    def test_params_mismatch(self, tmp_path: Path) -> None:
-        (tmp_path / "out.txt").write_text("x")
-        import json
 
-        (tmp_path / "step.params.json").write_text(json.dumps({"x": 1}, sort_keys=True))
-        pc = PipelineCache(tmp_path)
-        assert not pc.is_cached("step", ["out.txt"], params={"x": 99})
+def test_is_cached_params_match(tmp_path: Path) -> None:
+    (tmp_path / "out.txt").write_text("x")
+    (tmp_path / "step.params.json").write_text(json.dumps({"x": 1}, sort_keys=True))
+    pc = PipelineCache(tmp_path)
+    assert pc.is_cached("step", ["out.txt"], params={"x": 1})
 
-    def test_params_file_missing_is_miss(self, tmp_path: Path) -> None:
-        (tmp_path / "out.txt").write_text("x")
-        pc = PipelineCache(tmp_path)
-        assert not pc.is_cached("step", ["out.txt"], params={"x": 1})
+
+def test_is_cached_params_mismatch(tmp_path: Path) -> None:
+    (tmp_path / "out.txt").write_text("x")
+    (tmp_path / "step.params.json").write_text(json.dumps({"x": 1}, sort_keys=True))
+    pc = PipelineCache(tmp_path)
+    assert not pc.is_cached("step", ["out.txt"], params={"x": 99})
+
+
+def test_is_cached_params_file_missing_is_miss(tmp_path: Path) -> None:
+    (tmp_path / "out.txt").write_text("x")
+    pc = PipelineCache(tmp_path)
+    assert not pc.is_cached("step", ["out.txt"], params={"x": 1})
 
 
 # ---------------------------------------------------------------------------
@@ -106,240 +149,288 @@ class TestIsCached:
 # ---------------------------------------------------------------------------
 
 
-class TestContextManager:
-    def test_sets_active_cache(self, tmp_path: Path) -> None:
-        assert _active_cache.get() is None
-        pc = PipelineCache(tmp_path)
+def test_context_manager_sets_active_cache(tmp_path: Path) -> None:
+    assert _active_cache.get() is None
+    pc = PipelineCache(tmp_path)
+    with pc:
+        assert _active_cache.get() is pc
+    assert _active_cache.get() is None
+
+
+def test_context_manager_restores_on_exception(tmp_path: Path) -> None:
+    pc = PipelineCache(tmp_path)
+    try:
         with pc:
-            assert _active_cache.get() is pc
-        assert _active_cache.get() is None
+            error = "Error"
+            raise RuntimeError(error)
+    except RuntimeError:
+        pass
+    assert _active_cache.get() is None
 
-    def test_restores_on_exception(self, tmp_path: Path) -> None:
-        pc = PipelineCache(tmp_path)
-        try:
-            with pc:
-                raise RuntimeError("boom")
-        except RuntimeError:
-            pass
-        assert _active_cache.get() is None
 
-    def test_creates_cache_dir(self, tmp_path: Path) -> None:
-        cache_dir = tmp_path / "nested" / "cache"
-        assert not cache_dir.exists()
-        with PipelineCache(cache_dir):
-            assert cache_dir.is_dir()
+def test_context_manager_creates_cache_dir(tmp_path: Path) -> None:
+    cache_dir = tmp_path / "nested" / "cache"
+    assert not cache_dir.exists()
+    with PipelineCache(cache_dir):
+        assert cache_dir.is_dir()
 
 
 # ---------------------------------------------------------------------------
-# @cacheable (bare, auto-spec)
+# @cacheable mechanism
 # ---------------------------------------------------------------------------
 
 
-class TestCacheable:
-    def test_cache_miss_calls_function(self, tmp_path: Path) -> None:
-        calls: list[int] = []
+def test_cacheable_raises_on_no_return_annotation(tmp_path: Path) -> None:
+    """TypeError is raised on first call within a cache context if no return annotation is present."""
 
-        @cacheable
-        def fn(x: int) -> FakeResource:
-            calls.append(x)
-            return FakeResource(x * 3)
+    @cacheable  # type: ignore[misc]
+    def bad_fn(x: int):
+        pass
 
-        with PipelineCache(tmp_path):
-            result = fn(4)
-
-        assert calls == [4]
-        assert result.value == 12
-
-    def test_cache_hit_skips_function(self, tmp_path: Path) -> None:
-        calls: list[int] = []
-
-        @cacheable
-        def fn(x: int) -> FakeResource:
-            calls.append(x)
-            return FakeResource(x * 3)
-
-        pc = PipelineCache(tmp_path)
-        with pc:
-            fn(4)  # populate cache
-        calls.clear()
-        with pc:
-            result = fn(99)  # different arg — cache hit returns saved value
-
-        assert calls == []  # function not called
-        assert result.value == 12  # loaded from cache (original value)
-
-    def test_outside_context_no_caching(self) -> None:
-        calls: list[int] = []
-
-        @cacheable
-        def fn(x: int) -> FakeResource:
-            calls.append(x)
-            return FakeResource(x)
-
-        result = fn(7)
-        assert calls == [7]
-        assert result.value == 7  # returned directly, not from disk
-
-    def test_parameter_change_triggers_recompute(self, tmp_path: Path) -> None:
-        calls: list[int] = []
-
-        @cacheable
-        def fn(x: int, multiplier: int = 2) -> FakeResource:
-            calls.append(multiplier)
-            return FakeResource(x * multiplier)
-
-        pc = PipelineCache(tmp_path)
-        with pc:
-            fn(5, multiplier=2)
-        calls.clear()
-        with pc:
-            result = fn(5, multiplier=10)  # changed scalar param → recompute
-
-        assert calls == [10]
-        assert result.value == 50
-
-    def test_same_params_no_recompute(self, tmp_path: Path) -> None:
-        calls: list[int] = []
-
-        @cacheable
-        def fn(x: int, multiplier: int = 2) -> FakeResource:
-            calls.append(multiplier)
-            return FakeResource(x * multiplier)
-
-        pc = PipelineCache(tmp_path)
-        with pc:
-            fn(5, multiplier=2)
-        calls.clear()
-        with pc:
-            fn(5, multiplier=2)  # same params → cache hit
-
-        assert calls == []
-
-    def test_type_error_on_no_return_annotation(self) -> None:
-        with pytest.raises(TypeError, match="no resolvable return type"):
-
-            @cacheable
-            def bad_fn(x: int):
-                return FakeResource(x)
-
-    def test_type_error_on_missing_protocol(self) -> None:
-        with pytest.raises(TypeError, match="does not implement the cache protocol"):
-
-            @cacheable
-            def bad_fn(x: int) -> NoCacheProtocol:
-                return NoCacheProtocol()
-
-    def test_functools_wraps_preserved(self) -> None:
-        assert compute_fake.__name__ == "compute_fake"
-
-    def test_force_step_bypasses_cache(self, tmp_path: Path) -> None:
-        calls: list[int] = []
-
-        @cacheable
-        def fn(x: int) -> FakeResource:
-            calls.append(x)
-            return FakeResource(x)
-
-        pc = PipelineCache(tmp_path)
-        with pc:
-            fn(1)
-        calls.clear()
-        with PipelineCache(tmp_path, force={"fn"}):
-            fn(1)
-
-        assert calls == [1]  # forced recompute
+    with (
+        pytest.raises(TypeError, match="no resolvable return type"),
+        PipelineCache(tmp_path),
+    ):
+        bad_fn(1)
 
 
-# ---------------------------------------------------------------------------
-# @cacheable(CacheSpec(...)) — explicit spec
-# ---------------------------------------------------------------------------
-class TestCacheSpec:
-    def test_explicit_spec_miss_and_hit(self, tmp_path: Path) -> None:
-        calls: list[str] = []
+def test_cacheable_raises_on_missing_protocol(tmp_path: Path) -> None:
+    """TypeError is raised on first call within a cache context if return type lacks cache protocol.
 
-        @cacheable(
-            CacheSpec(
-                files=["result.txt"],
-                save=lambda val, d: (d / "result.txt").write_text(val),
-                load=lambda d: (d / "result.txt").read_text(),
-            )
-        )
-        def fn(label: str) -> str:
-            calls.append(label)
-            return label.upper()
+    Uses int as the return type: it is resolvable from the module namespace but does not
+    implement _cache_files / _cache_save / _cache_load.
+    """
 
-        pc = PipelineCache(tmp_path)
-        with pc:
-            r1 = fn("hello")
-        assert r1 == "HELLO"
-        assert calls == ["hello"]
+    @cacheable  # type: ignore[misc]
+    def bad_fn(x: int) -> int:
+        return x
 
-        calls.clear()
-        with pc:
-            r2 = fn("world")  # cache hit — returns previously saved value
-        assert r2 == "HELLO"
-        assert calls == []
+    with (
+        pytest.raises(TypeError, match="does not implement the cache protocol"),
+        PipelineCache(tmp_path),
+    ):
+        bad_fn(1)
 
-    def test_explicit_spec_param_change(self, tmp_path: Path) -> None:
-        calls: list[str] = []
 
-        @cacheable(
-            CacheSpec(
-                files=["result.txt"],
-                save=lambda val, d: (d / "result.txt").write_text(val),
-                load=lambda d: (d / "result.txt").read_text(),
-            )
-        )
-        def fn(label: str) -> str:
-            calls.append(label)
-            return label.upper()
+def test_cacheable_preserves_function_name() -> None:
+    """@cacheable preserves __name__ on the wrapped function."""
+    assert Dti.estimate_from_dwi.__name__ == "estimate_from_dwi"
+    assert Noddi.estimate_from_dwi.__name__ == "estimate_from_dwi"
+    assert Dwi.denoise.__name__ == "denoise"
 
-        pc = PipelineCache(tmp_path)
-        with pc:
-            fn("hello")
-        calls.clear()
-        with pc:
-            r = fn("goodbye")  # scalar param changed → recompute
 
-        assert calls == ["goodbye"]
-        assert r == "GOODBYE"
+def test_cacheable_no_op_outside_context(dwi3: Dwi) -> None:
+    """@cacheable is a transparent pass-through when no PipelineCache context is active."""
+    dti = dwi3.estimate_dti()
+    assert isinstance(dti, Dti)
 
 
 # ---------------------------------------------------------------------------
 # PipelineCache.status
 # ---------------------------------------------------------------------------
-class TestStatus:
-    def test_missing_shows_false(self, tmp_path: Path) -> None:
-        pc = PipelineCache(tmp_path)
-        result = pc.status([compute_fake])
-        assert result["compute_fake"] is False
 
-    def test_present_shows_true(self, tmp_path: Path) -> None:
-        pc = PipelineCache(tmp_path)
-        with pc:
-            compute_fake(3)
-        result = pc.status([compute_fake])
-        assert result["compute_fake"] is True
 
-    def test_non_cacheable_skipped(self, tmp_path: Path) -> None:
-        def plain() -> None:
-            pass
+def test_status_missing_shows_false(tmp_path: Path) -> None:
+    pc = PipelineCache(tmp_path)
+    result = pc.status([Dti.estimate_from_dwi])
+    assert result["Dti.estimate_from_dwi"] is False
 
-        pc = PipelineCache(tmp_path)
-        assert pc.status([plain]) == {}
 
-    def test_multiple_steps(self, tmp_path: Path) -> None:
-        @cacheable
-        def step_a(x: int) -> FakeResource:
-            return FakeResource(x)
+def test_status_present_shows_true(dwi3: Dwi, tmp_path: Path) -> None:
+    pc = PipelineCache(tmp_path)
+    with pc:
+        dwi3.estimate_dti()
+    result = pc.status([Dti.estimate_from_dwi])
+    assert result["Dti.estimate_from_dwi"] is True
 
-        @cacheable
-        def step_b(x: int) -> FakeResource:
-            return FakeResource(x)
 
-        pc = PipelineCache(tmp_path)
-        with pc:
-            step_a(1)
-        result = pc.status([step_a, step_b])
-        assert result["step_a"] is True
-        assert result["step_b"] is False
+def test_status_non_cacheable_skipped(tmp_path: Path) -> None:
+    def plain() -> None:
+        pass
+
+    pc = PipelineCache(tmp_path)
+    assert pc.status([plain]) == {}
+
+
+def test_status_multiple_steps(dwi3: Dwi, tmp_path: Path) -> None:
+    """status reflects which steps have been cached and which have not."""
+    pc = PipelineCache(tmp_path)
+    with pc:
+        dwi3.estimate_dti()
+    result = pc.status([Dti.estimate_from_dwi, Noddi.estimate_from_dwi])
+    assert result["Dti.estimate_from_dwi"] is True
+    assert result["Noddi.estimate_from_dwi"] is False
+
+
+# ---------------------------------------------------------------------------
+# Integration tests
+# ---------------------------------------------------------------------------
+
+
+def test_estimate_dti_with_caching(dwi3: Dwi, tmp_path: Path) -> None:
+    """DTI results are saved to cache and reloaded correctly on the second call."""
+    pc = PipelineCache(tmp_path)
+    with pc:
+        dti = dwi3.estimate_dti()
+
+    assert np.allclose(dti.volume.get_affine(), dwi3.volume.get_affine())
+    assert dti.volume.get_array().shape[:3] == (3, 4, 5)
+    assert (tmp_path / "dti.nii.gz").exists()
+    assert pc.status([Dti.estimate_from_dwi])["Dti.estimate_from_dwi"] is True
+
+    # Second call returns the same result loaded from cache
+    with pc:
+        dti_cached = dwi3.estimate_dti()
+    assert np.allclose(dti_cached.volume.get_array(), dti.volume.get_array())
+
+
+def test_estimate_dti_force_recompute(dwi3: Dwi, tmp_path: Path, mocker) -> None:
+    """force={"estimate_from_dwi"} causes DTI to recompute even when a cache exists."""
+    pc = PipelineCache(tmp_path)
+    with pc:
+        dwi3.estimate_dti()
+
+    save_spy = mocker.spy(Dti, "_cache_save")
+    with PipelineCache(tmp_path, force={"estimate_from_dwi"}):
+        dwi3.estimate_dti()
+
+    save_spy.assert_called_once()
+
+
+def _make_amico_mock(mocker, rng: np.random.Generator) -> MagicMock:
+    """Patch AMICO internals so Noddi.estimate_from_dwi runs without the full AMICO stack.
+
+    The @cacheable wrapper on estimate_from_dwi is left intact so that caching
+    behaviour can be tested end-to-end.
+    """
+    mock_ae = MagicMock()
+    mock_ae.RESULTS = {
+        "MAPs": rng.random(size=(3, 4, 5, 3)).astype(np.float32),
+        "DIRs": rng.random(size=(3, 4, 5, 3)).astype(np.float32),
+    }
+    mock_ae.model.maps_name = ["NDI", "ODI", "FWF"]
+    mocker.patch("kwneuro.noddi.amico.setup")
+    mocker.patch("kwneuro.noddi.amico.Evaluation", return_value=mock_ae)
+    mocker.patch("kwneuro.noddi.amico.util.fsl2scheme")
+    return mock_ae
+
+
+def test_estimate_noddi_with_caching(dwi3: Dwi, mocker, tmp_path: Path) -> None:
+    """NODDI results are saved to cache and reloaded correctly on the second call."""
+    mock_ae = _make_amico_mock(mocker, np.random.default_rng(18653))
+
+    pc = PipelineCache(tmp_path)
+    with pc:
+        noddi = dwi3.estimate_noddi()
+
+    assert np.allclose(noddi.volume.get_array(), mock_ae.RESULTS["MAPs"])
+    assert np.allclose(noddi.directions.get_array(), mock_ae.RESULTS["DIRs"])
+    assert np.allclose(noddi.volume.get_affine(), dwi3.volume.get_affine())
+    assert (tmp_path / "noddi.nii.gz").exists()
+    assert (tmp_path / "noddi_directions.nii.gz").exists()
+    assert pc.status([Noddi.estimate_from_dwi])["Noddi.estimate_from_dwi"] is True
+
+    # Second call loads from cache — AMICO fit is not re-invoked
+    mock_ae.fit.reset_mock()
+    with pc:
+        dwi3.estimate_noddi()
+    mock_ae.fit.assert_not_called()
+
+
+def test_estimate_noddi_parameter_change_triggers_recompute(
+    dwi3: Dwi, mocker, tmp_path: Path
+) -> None:
+    """Changing a scalar parameter (dpar) invalidates the NODDI cache and triggers recomputation."""
+    mock_ae = _make_amico_mock(mocker, np.random.default_rng(18653))
+
+    pc = PipelineCache(tmp_path)
+    with pc:
+        dwi3.estimate_noddi(dpar=1.7e-3)
+
+    mock_ae.fit.reset_mock()
+    with pc:
+        dwi3.estimate_noddi(dpar=1.3e-3)  # different dpar → cache miss
+
+    mock_ae.fit.assert_called_once()
+
+
+def test_estimate_noddi_same_params_no_recompute(
+    dwi3: Dwi, mocker, tmp_path: Path
+) -> None:
+    """Calling estimate_noddi with unchanged parameters reuses the cached result."""
+    mock_ae = _make_amico_mock(mocker, np.random.default_rng(18653))
+
+    pc = PipelineCache(tmp_path)
+    with pc:
+        dwi3.estimate_noddi(dpar=1.7e-3)
+
+    mock_ae.fit.reset_mock()
+    with pc:
+        dwi3.estimate_noddi(dpar=1.7e-3)  # same params → cache hit
+
+    mock_ae.fit.assert_not_called()
+
+
+def test_compute_csd_peaks_with_caching(dwi3: Dwi, mocker, tmp_path: Path) -> None:
+    """CSD peaks are saved to cache via CacheSpec and reloaded correctly on the second call.
+
+    compute_csd_peaks uses @cacheable(CacheSpec(...)) rather than the bare @cacheable
+    decorator, so this test exercises the explicit-spec caching path with fixed output
+    filenames and custom save/load lambdas.
+    """
+    rng = np.random.default_rng(18653)
+    n_peaks = 5
+
+    # Mock the DIPY CSD model and peak-finding to avoid running the full pipeline,
+    mock_peaks = MagicMock()
+    mock_peaks.peak_dirs = rng.random(size=(3, 4, 5, n_peaks, 3)).astype(np.float32)
+    mock_peaks.peak_values = rng.random(size=(3, 4, 5, n_peaks)).astype(np.float32)
+    mocker.patch("kwneuro.csd.ConstrainedSphericalDeconvModel")
+    mock_peaks_from_model = mocker.patch(
+        "kwneuro.csd.peaks_from_model", return_value=mock_peaks
+    )
+
+    mask = InMemoryVolumeResource(
+        array=np.ones((3, 4, 5), dtype=np.float32),
+        affine=dwi3.volume.get_affine(),
+    )
+    mock_response = MagicMock()
+
+    pc = PipelineCache(tmp_path)
+    with pc:
+        peak_dirs, peak_values = compute_csd_peaks(dwi3, mask, response=mock_response)
+
+    # Result contains the expected arrays
+    assert np.allclose(peak_dirs.get_array(), mock_peaks.peak_dirs)
+    assert np.allclose(peak_values.get_array(), mock_peaks.peak_values)
+
+    # Cache files (fixed names from CacheSpec) exist and status reports cached
+    assert (tmp_path / "csd_peak_dirs.nii.gz").exists()
+    assert (tmp_path / "csd_peak_values.nii.gz").exists()
+    assert pc.status([compute_csd_peaks])["compute_csd_peaks"] is True
+
+    # Second call loads from cache — peaks_from_model is not re-invoked
+    mock_peaks_from_model.reset_mock()
+    with pc:
+        compute_csd_peaks(dwi3, mask, response=mock_response)
+    mock_peaks_from_model.assert_not_called()
+
+
+def test_denoise_with_caching(dwi4: Dwi, tmp_path: Path) -> None:
+    """Denoised DWI is saved to cache and reloaded correctly on the second call."""
+    pc = PipelineCache(tmp_path)
+    with pc:
+        denoised = dwi4.denoise()
+
+    assert isinstance(denoised, Dwi)
+    assert denoised.volume.get_array().shape == dwi4.volume.get_array().shape
+    assert np.allclose(denoised.volume.get_affine(), dwi4.volume.get_affine())
+    assert (tmp_path / "denoise.nii.gz").exists()
+    assert (tmp_path / "denoise.bval").exists()
+    assert (tmp_path / "denoise.bvec").exists()
+    assert pc.status([Dwi.denoise])["Dwi.denoise"] is True
+
+    # Second call returns the same volume loaded from cache
+    with pc:
+        denoised_cached = dwi4.denoise()
+    assert np.allclose(denoised_cached.volume.get_array(), denoised.volume.get_array())
