@@ -156,12 +156,10 @@ Pipeline functions typically return Resources, while wrapper methods on domain
 objects return new domain objects:
 
 1. **Denoising** (`src/kwneuro/denoise.py`):
-
    - `denoise_dwi(dwi: Dwi) -> InMemoryVolumeResource`
    - Uses DIPY's Patch2Self algorithm
 
 2. **Masking** (`src/kwneuro/masks.py`):
-
    - `brain_extract_batch(cases: list[tuple[Dwi, Path]]) -> list[NiftiVolumeResource]`
    - `brain_extract_single(dwi: Dwi, output_path: PathLike) -> NiftiVolumeResource`
    - Uses HD-BET (deep learning) on mean b0 images
@@ -169,14 +167,12 @@ objects return new domain objects:
      expensive
 
 3. **DTI Estimation** (`src/kwneuro/dti.py`):
-
    - `Dti.estimate_from_dwi(dwi: Dwi, mask: VolumeResource | None) -> Dti`
    - Uses DIPY's TensorModel
    - Returns 6 values per voxel (lower triangular of symmetric tensor)
    - Provides derived maps: `get_fa_md()`, `get_eig()`
 
 4. **NODDI Estimation** (`src/kwneuro/noddi.py`):
-
    - `Noddi.estimate_from_dwi(dwi: Dwi, mask, dpar, n_kernel_dirs) -> Noddi`
    - Uses AMICO library
    - Outputs NDI (neurite density), ODI (orientation dispersion), FWF (free
@@ -186,7 +182,6 @@ objects return new domain objects:
      directory via `set_config("ATOMS_path", tmpdir)`
 
 5. **CSD / Fiber Orientation** (`src/kwneuro/csd.py`):
-
    - `estimate_response_function(dwi, mask, ...) -> InMemoryResponseFunctionResource`
      - Uses DIPY's SSST method on low-b (<=1200) data
    - `combine_response_functions(responses) -> InMemoryResponseFunctionResource`
@@ -200,7 +195,6 @@ objects return new domain objects:
      - Converts Dipy peak format to MRtrix3-style vector volume
 
 6. **Registration** (`src/kwneuro/reg.py`):
-
    - `register_volumes(fixed, moving, type_of_transform, mask, moving_mask) -> tuple[InMemoryVolumeResource, TransformResource]`
      - Wraps ANTs registration; supports Rigid, Affine, SyN, etc.
    - `TransformResource` wraps ANTs transform files (affine .mat and warp .nii)
@@ -210,7 +204,6 @@ objects return new domain objects:
        components
 
 7. **Template Building** (`src/kwneuro/build_template.py`):
-
    - `average_volumes(volume_list, normalize) -> InMemoryVolumeResource`
    - `build_template(volume_list, initial_template, iterations) -> InMemoryVolumeResource`
      - Iterative unbiased groupwise registration (SyN + affine averaging +
@@ -219,11 +212,22 @@ objects return new domain objects:
      - Multi-modality variant using multivariate ANTs registration
 
 8. **Tract Segmentation** (`src/kwneuro/tractseg.py`):
-
    - `extract_tractseg(dwi, mask, response, output_type) -> VolumeResource`
      - Computes CSD peaks, then runs TractSeg
      - `output_type`: `"tract_segmentation"`, `"endings_segmentation"`, or
        `"TOM"`
+
+9. **Harmonization** (`src/kwneuro/harmonize.py`):
+   - `harmonize_volumes(volumes, covars, batch_col, mask, ...) -> tuple[list[InMemoryVolumeResource], CombatEstimates]`
+     - Wraps neuroCombat for multi-site ComBat harmonization
+     - Operates on 3D scalar maps (FA, MD, NDI, etc.) in common space
+     - Flattens masked voxels to features, runs ComBat, reshapes back
+     - `preserve_out_of_mask` flag to retain or zero out-of-mask voxels
+   - `CombatEstimates` dataclass wraps neuroCombat's estimates and info dicts
+   - **Important**: All input volumes must be in the same voxel space (same
+     shape/affine)
+   - **Important**: This is a group-level operation (like build_template), not a
+     per-subject stage
 
 ### CLI Integration
 
@@ -328,6 +332,14 @@ When combining multiple `Dwi` objects:
    persist ANTs transform files before the temp dir is cleaned up
 9. **ANTs coordinate conventions differ from nibabel** - the `to_ants_image()`/
    `from_ants_image()` methods handle the RAS+ to LPS+ conversion
+10. **neuroCombat expects (features, samples) layout** - our wrapper handles the
+    transpose, but if interacting with neuroCombat directly, remember that rows
+    are voxels and columns are subjects
+11. **neuroCombat prints to stdout** - brief progress messages that we don't
+    suppress; this is expected behavior
+12. **neuroHarmonize's dependency declaration is broken** - neuroHarmonize
+    (which wraps neuroCombat) fails to declare neuroCombat as a dependency; we
+    depend on neuroCombat directly to avoid this issue
 
 ## Testing Strategy
 
@@ -347,8 +359,11 @@ When combining multiple `Dwi` objects:
 - **click**: CLI framework
 - **antspyx** (>=0.6.2): Registration and template building
 - **TractSeg**: White matter tract segmentation
+- **neuroCombat** (==0.2.12): ComBat harmonization for multi-site data
 
 ### Pinned Versions
 
 - AMICO and HD-BET are pinned due to API stability concerns
 - `backports.tarfile` required for older amico/setuptools compatibility
+- neuroCombat is pinned because the library is dormant (no releases since 2021)
+  and we want Dependabot to flag any unexpected new release
