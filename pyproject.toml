@@ -55,6 +55,13 @@ dev = [
   "pytest-mock >=3.14",
   "pre-commit",
 ]
+notebooks = [
+  "matplotlib",
+  "jupytext",
+  "ipykernel",
+  "notebook",
+  "ipywidgets",
+]
 docs = [
   "sphinx>=7.0",
   "sphinx-autobuild==2024.10.3",
