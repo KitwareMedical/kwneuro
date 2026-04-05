@@ -84,6 +84,14 @@ uv build
 # Version is managed by setuptools_scm based on git tags
 ```
 
+### Verification checklist
+
+After a chunk of development, run all three before committing:
+
+1. `uv run --extra dev pre-commit run --all-files` — linting, formatting, type checking
+2. `uv run --extra dev pytest` — tests
+3. `uv run --extra docs sphinx-build -n -T docs docs/_build/html` — docs build (catches broken cross-references)
+
 ## Architecture
 
 ### The Resource Abstraction Pattern
