@@ -41,6 +41,7 @@ dependencies = [
   "backports.tarfile",
   "TractSeg",
   "antspyx>=0.6.2",
+  "neuroCombat ==0.2.12",
 ]
 
 [project.optional-dependencies]
@@ -122,6 +123,10 @@ disallow_incomplete_defs = false
 module = "kwneuro.*"
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
+
+[[tool.mypy.overrides]]
+module = "neuroCombat.*"
+ignore_missing_imports = true
 
 
 [tool.ruff]
