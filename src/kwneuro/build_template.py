@@ -21,6 +21,7 @@ def average_volumes(
     Input volumes are automatically resampled to the largest image space in the list.
     However, no registration is performed so all volumes should be in the same physical coordinate space to begin with.
     This is a simplified version of ANTs `average_images`. All volumes are treated with equal weight (1/N).
+
     Args:
         volume_list: A list of 3D scalar VolumeResource objects. Volumes do not need
                  to share the same shape/resolution but must be physically aligned.

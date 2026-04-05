@@ -44,9 +44,12 @@ myst_enable_extensions = [
 
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
+    "numpy": ("https://numpy.org/doc/stable/", None),
 }
 
-nitpick_ignore = [
-    ("py:class", "_io.StringIO"),
-    ("py:class", "_io.BytesIO"),
+nitpick_ignore_regex = [
+    (r"py:class", r"ants\..*"),
+    (r"py:class", r"dipy\..*"),
+    (r"py:class", r"numpy\.typing\.NDArray"),
+    (r"py:class", r"_io\..*"),
 ]

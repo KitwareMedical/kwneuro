@@ -108,9 +108,9 @@ class Dwi:
 
     @staticmethod
     def concatenate(dwis: list[Dwi]) -> Dwi:
-        """Concatenate a list of `Dwi`s into a single (loaded) DWI.
+        """Concatenate a list of ``Dwi``\\s into a single (loaded) DWI.
 
-        The affine and metadata of the first `Dwi` in the list will be used to concatenate volumes.
+        The affine and metadata of the first ``Dwi`` in the list will be used to concatenate volumes.
         """
         if len(dwis) == 0:
             msg = "Cannot concatenate an empty list of DWIs."
@@ -211,7 +211,7 @@ class Dwi:
     def extract_brain(self) -> InMemoryVolumeResource:
         """Extract brain mask. This is meant to be convenient rather than efficient.
         Using this in a loop could result in unnecessary repetition of file I/O operations.
-        For efficiency, see `kwneuro.masks.brain_extract_batch`.
+        For efficiency, see :func:`kwneuro.masks.brain_extract_batch`.
         """
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "brain_mask.nii.gz"
@@ -228,5 +228,5 @@ class Dwi:
         dpar: float = 1.7e-3,
         n_kernel_dirs: int = 500,
     ) -> Noddi:
-        """Estimate NODDI model parameters from this DWI. See `Noddi.estimate_from_dwi` for details."""
+        """Estimate NODDI model parameters from this DWI. See :meth:`kwneuro.noddi.Noddi.estimate_from_dwi` for details."""
         return Noddi.estimate_from_dwi(self, mask, dpar, n_kernel_dirs)

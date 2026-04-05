@@ -74,7 +74,8 @@ class Noddi:
             dpar: The parallel diffusivity to be used in the model fitting. If not provided, the default value of
                 1.7e-3 mm^2/s is used, which is suitable for white matter. For gray matter, a value of 1.3e-3 mm^2/s is recommended.
             n_kernel_dirs: The number of directions to use when generating the AMICO NODDI kernels. This value represents the total
-            count of possible orientations for the response functions across the half-sphere. Default: 500.
+                count of possible orientations for the response functions across the half-sphere. Default: 500.
+
         Returns: A Noddi resource containing the estimated parameters.
         """
         amico.setup()

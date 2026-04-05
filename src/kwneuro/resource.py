@@ -174,12 +174,12 @@ class ResponseFunctionResource(Resource):
 
     @abstractmethod
     def get(self) -> tuple[NDArray, np.floating]:
-        """Returns the underlying response function components as (sh_coeffs, avg_signal)
-        Returns:
-            sh_coeffs: An array of m=0 coefficients for even degrees l = [0, 2, ..., sh_order].
-            The array length is ((sh_order / 2) + 1,), where sh_order is the maximal spherical harmonics order.
+        """Returns the underlying response function components as (sh_coeffs, avg_signal).
 
-            avg_signal: The mean signal intensity across the sphere, equivalent to the m=0, l=0 component.
+        Returns:
+            A tuple of (sh_coeffs, avg_signal) where sh_coeffs is an array of m=0 coefficients
+            for even degrees l = [0, 2, ..., sh_order] with length (sh_order / 2) + 1,
+            and avg_signal is the mean signal intensity across the sphere.
         """
 
     @abstractmethod
@@ -202,11 +202,13 @@ class InMemoryResponseFunctionResource(ResponseFunctionResource):
     even-degree model. Following the Dipy convention for symmetric signals, only even degrees (l = 0, 2, 4, ...,
     sh_order) are included. Under the assumption of axial symmetry, only the m = 0 coefficients are included.
     The coefficients are ordered by increasing degree l:
-        Index 0: l=0, m=0 (proportional to the average signal or avg_signal)
-        Index 1: l=2, m=0
-        Index 2: l=4, m=0
-        ...
-        Index M-1: l=sh_order, m=0
+
+    - Index 0: l=0, m=0 (proportional to the average signal or avg_signal)
+    - Index 1: l=2, m=0
+    - Index 2: l=4, m=0
+    - ...
+    - Index M-1: l=sh_order, m=0
+
     The total number of coefficients M is (sh_order / 2) + 1.
     """
 
@@ -214,12 +216,12 @@ class InMemoryResponseFunctionResource(ResponseFunctionResource):
     """ The average non-diffusion weighted signal within the voxels used to calculate the response function"""
 
     def get(self) -> tuple[NDArray, np.floating]:
-        """Returns the underlying response function components as (sh_coeffs, avg_signal)
-        Returns:
-            sh_coeffs: An array of m=0 coefficients for even degrees l = [0, 2, ..., sh_order].
-            The array length is ((sh_order / 2) + 1,), where sh_order is the maximal spherical harmonics order.
+        """Returns the underlying response function components as (sh_coeffs, avg_signal).
 
-            avg_signal: The mean signal intensity across the sphere, equivalent to the m=0, l=0 component.
+        Returns:
+            A tuple of (sh_coeffs, avg_signal) where sh_coeffs is an array of m=0 coefficients
+            for even degrees l = [0, 2, ..., sh_order] with length (sh_order / 2) + 1,
+            and avg_signal is the mean signal intensity across the sphere.
         """
         return (self.sh_coeffs, self.avg_signal)
 
@@ -233,10 +235,12 @@ class InMemoryResponseFunctionResource(ResponseFunctionResource):
         spherical harmonic coefficients using the approach from DIPY's
         `csdeconv` module:
         https://github.com/dipy/dipy/blob/f7b863f1485cd3fa6329c8e8f3388d8f58863f0d/dipy/reconst/csdeconv.py#L168.
+
         Args:
             response: Response function output by DIPY.
             gtab: Gradient table used to estimate response
             sh_order_max: Maximum spherical harmonic order to use for the basis model. Default is 8.
+
         Returns: InMemoryResponseFunctionResource
         """
 
