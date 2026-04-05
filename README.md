@@ -47,6 +47,8 @@ kwneuro is not (yet) a replacement for the full power of FSL or MRtrix3. It is a
 lightweight layer for researchers who want standard dMRI analyses with minimal
 friction.
 
+<!-- GETTING-STARTED-START -->
+
 ## Installation
 
 ```bash
@@ -97,6 +99,8 @@ noddi.save("output/noddi.nii.gz")
 | **Tract segmentation** | 72 white-matter bundles from CSD peaks                            | TractSeg   |
 | **Registration**       | Pairwise registration (rigid, affine, SyN)                        | ANTs       |
 | **Template building**  | Iterative unbiased population templates (single- or multi-metric) | ANTs       |
+
+<!-- GETTING-STARTED-END -->
 
 ## Example notebooks
 
