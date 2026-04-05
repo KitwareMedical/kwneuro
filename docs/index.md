@@ -4,6 +4,8 @@
 :maxdepth: 2
 :hidden:
 
+getting-started
+API Reference <autoapi/index>
 ```
 
 ```{include} ../README.md

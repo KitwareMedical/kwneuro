@@ -10,10 +10,10 @@ Install uv following the
 [official instructions](https://docs.astral.sh/uv/getting-started/installation/),
 then clone the repo and sync:
 
-```console
-$ git clone https://github.com/brain-microstructure-exploration-tools/kwneuro.git
-$ cd kwneuro
-$ uv sync --extra dev
+```bash
+git clone https://github.com/brain-microstructure-exploration-tools/kwneuro.git
+cd kwneuro
+uv sync --extra dev
 ```
 
 This creates a virtual environment under `.venv/`, installs kwneuro in editable
@@ -22,11 +22,11 @@ reproducible installs.
 
 Common tasks:
 
-```console
-$ uv run pytest                            # Run tests
-$ uv run pytest --cov=kwneuro              # Run tests with coverage
-$ uv run pre-commit run --all-files        # Format + fast lint
-$ uv run pylint kwneuro                    # Thorough lint (slow)
+```bash
+uv run pytest                            # Run tests
+uv run pytest --cov=kwneuro              # Run tests with coverage
+uv run pre-commit run --all-files        # Format + fast lint
+uv run pylint kwneuro                    # Thorough lint (slow)
 ```
 
 # Setting up without uv
@@ -44,37 +44,36 @@ pip install -e ".[dev]"
 This project uses pre-commit for all style checking. Install the hook so it runs
 automatically on each commit:
 
-```console
-$ uv run pre-commit install
+```bash
+uv run pre-commit install
 ```
 
 You can also run it manually:
 
-```console
-$ uv run pre-commit run --all-files
+```bash
+uv run pre-commit run --all-files
 ```
 
 # Testing
 
-```console
-$ uv run pytest
+```bash
+uv run pytest
 ```
 
 # Coverage
 
-```console
-$ uv run pytest --cov=kwneuro
+```bash
+uv run pytest --cov=kwneuro
 ```
 
 # Building docs
 
-```console
-$ uv run --extra docs sphinx-apidoc -o docs --separate --module-first -d 2 --force src
-$ uv run --extra docs sphinx-build -n -T docs docs/_build/html
+```bash
+uv run --extra docs sphinx-build -n -T docs docs/_build/html
 ```
 
 To live-preview while editing:
 
-```console
-$ uv run --extra docs sphinx-autobuild -n -T docs docs/_build/html
+```bash
+uv run --extra docs sphinx-autobuild -n -T docs docs/_build/html
 ```

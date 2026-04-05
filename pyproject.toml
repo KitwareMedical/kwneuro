@@ -64,9 +64,9 @@ notebooks = [
 docs = [
   "sphinx>=7.0",
   "sphinx-autobuild==2024.10.3",
+  "sphinx-autoapi>=3.0",
   "myst_parser>=0.13",
   "sphinx_copybutton",
-  "sphinx_autodoc_typehints",
   "sphinx_click",
   "furo>=2023.08.17",
 ]
