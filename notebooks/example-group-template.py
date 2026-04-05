@@ -47,17 +47,9 @@ SUBSAMPLE_FACTOR = 2
 # Total download size: ~250 MB for 3 subjects.
 
 # %%
-import subprocess
-import sys
 from pathlib import Path
 
-# Install openneuro-py if needed
-try:
-    import openneuro as on
-except ImportError:
-    print("Installing openneuro-py...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "openneuro-py"])
-    import openneuro as on
+import openneuro as on
 
 # %%
 DATA_DIR = Path("example_data/ds000221")
