@@ -1,6 +1,7 @@
 # ---
 # jupyter:
 #   jupytext:
+#     formats: ipynb,py:percent
 #     text_representation:
 #       extension: .py
 #       format_name: percent
@@ -25,6 +26,15 @@
 # 2. Build a single-metric population template
 # 3. Build a multi-metric population template
 # 4. Save templates to disk
+
+# %% [markdown]
+# ### Spatial subsampling
+#
+# Configure the following to spatially subsample the data and run through the demo more quickly at lower spatial resolution.
+
+# %%
+SUBSAMPLE = True
+SUBSAMPLE_FACTOR = 2
 
 # %% [markdown]
 # ## 0. Download example data
@@ -100,6 +110,12 @@ for subject in SUBJECTS:
     ).load())
 
 print(f"Loaded {len(dwis)} subjects")
+
+if SUBSAMPLE:
+    from kwneuro.dwi import subsample_dwi
+
+    dwis = [subsample_dwi(d, SUBSAMPLE_FACTOR) for d in dwis]
+    print(f"Subsampled by factor {SUBSAMPLE_FACTOR}")
 
 # Brain extraction in one batch (HD-BET initializes once)
 with tempfile.TemporaryDirectory() as tmpdir:
