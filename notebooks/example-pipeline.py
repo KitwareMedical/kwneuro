@@ -348,3 +348,31 @@ NiftiVolumeResource.save(mask, output_dir / "brain_mask.nii.gz")
 dwi_denoised.save(output_dir, basename="denoised_dwi")
 
 print(f"Results saved to {output_dir.resolve()}")
+
+# %% [markdown]
+# ## Pipeline caching
+#
+# Wrapping pipeline steps in a `PipelineCache` context saves results to disk
+# on the first run and reloads them automatically on subsequent runs, skipping
+# the underlying computation. Scalar parameters (`int`, `float`, `str`, `bool`)
+# are fingerprinted automatically — changing them invalidates only that step's
+# cache. Use a separate `cache_dir` per subject so cached results stay isolated.
+# Pass `force={"step_name"}` (or `force=True`) to recompute a specific step or
+# all steps.
+
+# %%
+from kwneuro.cache import PipelineCache
+from kwneuro.dti import Dti
+from kwneuro.noddi import Noddi
+
+cache_dir = Path("cache")
+
+with PipelineCache(cache_dir) as pc:
+    dti_cached = dwi_denoised.estimate_dti(mask=mask)
+    noddi_cached = dwi_denoised.estimate_noddi(mask=mask)
+    _, peaks_cached = compute_csd_peaks(dwi_denoised, mask, response)
+
+status = pc.status([Dti.estimate_from_dwi, Noddi.estimate_from_dwi, compute_csd_peaks])
+print("Cache status:")
+for step, is_cached in status.items():
+    print(f"  {step}: {'cached' if is_cached else 'not cached'}")
