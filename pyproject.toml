@@ -61,6 +61,7 @@ notebooks = [
   "ipykernel",
   "notebook",
   "ipywidgets",
+  "openneuro-py",
 ]
 docs = [
   "sphinx>=7.0",

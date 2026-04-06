@@ -1,6 +1,7 @@
 # ---
 # jupyter:
 #   jupytext:
+#     formats: ipynb,py:percent
 #     text_representation:
 #       extension: .py
 #       format_name: percent
@@ -27,6 +28,15 @@
 # 4. Save templates to disk
 
 # %% [markdown]
+# ### Spatial subsampling
+#
+# Configure the following to spatially subsample the data and run through the demo more quickly at lower spatial resolution.
+
+# %%
+SUBSAMPLE = True
+SUBSAMPLE_FACTOR = 2
+
+# %% [markdown]
 # ## 0. Download example data
 #
 # We download 3 subjects from the MPI-Leipzig Mind-Brain-Body dataset
@@ -37,17 +47,9 @@
 # Total download size: ~250 MB for 3 subjects.
 
 # %%
-import subprocess
-import sys
 from pathlib import Path
 
-# Install openneuro-py if needed
-try:
-    import openneuro as on
-except ImportError:
-    print("Installing openneuro-py...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "openneuro-py"])
-    import openneuro as on
+import openneuro as on
 
 # %%
 DATA_DIR = Path("example_data/ds000221")
@@ -100,6 +102,12 @@ for subject in SUBJECTS:
     ).load())
 
 print(f"Loaded {len(dwis)} subjects")
+
+if SUBSAMPLE:
+    from kwneuro.dwi import subsample_dwi
+
+    dwis = [subsample_dwi(d, SUBSAMPLE_FACTOR) for d in dwis]
+    print(f"Subsampled by factor {SUBSAMPLE_FACTOR}")
 
 # Brain extraction in one batch (HD-BET initializes once)
 with tempfile.TemporaryDirectory() as tmpdir:

@@ -1,6 +1,7 @@
 # ---
 # jupyter:
 #   jupytext:
+#     formats: ipynb,py:percent
 #     text_representation:
 #       extension: .py
 #       format_name: percent
@@ -29,6 +30,15 @@
 # 6. CSD / Fiber Orientation Distributions
 # 7. TractSeg white matter tract segmentation
 # 8. Saving results to disk
+
+# %% [markdown]
+# ### Spatial subsampling
+#
+# Configure the following to spatially subsample the data and run through the demo more quickly at lower spatial resolution.
+
+# %%
+SUBSAMPLE = True
+SUBSAMPLE_FACTOR = 2
 
 # %% [markdown]
 # ## 0. Download example data
@@ -72,6 +82,12 @@ dwi = Dwi(
     FslBvalResource(data_dir / f"{basename}.bval"),
     FslBvecResource(data_dir / f"{basename}.bvec"),
 ).load()
+
+if SUBSAMPLE:
+    from kwneuro.dwi import subsample_dwi
+
+    dwi = subsample_dwi(dwi, SUBSAMPLE_FACTOR)
+    print(f"Subsampled by factor {SUBSAMPLE_FACTOR}")
 
 vol = dwi.volume.get_array()
 bvals = dwi.bval.get()

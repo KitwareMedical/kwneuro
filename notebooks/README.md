@@ -10,18 +10,11 @@ Install the notebook dependencies with
 [uv](https://docs.astral.sh/uv/getting-started/installation/), then open a
 notebook:
 
-```console
-$ uv sync --extra notebooks
-$ cd notebooks
-$ uv run jupytext --to notebook example-pipeline.py
-$ uv run jupyter notebook example-pipeline.ipynb
-```
-
-Or, if you have Jupytext's Jupyter extension enabled, simply open the `.py` file
-directly in Jupyter:
-
-```console
-$ uv run jupyter notebook example-pipeline.py
+```bash
+uv sync --extra notebooks
+cd notebooks
+uv run jupytext --to notebook example-pipeline.py
+uv run jupyter notebook example-pipeline.ipynb
 ```
 
 ### Without uv
