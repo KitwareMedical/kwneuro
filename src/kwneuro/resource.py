@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, ClassVar
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, ClassVar
+
+if TYPE_CHECKING:
+    from kwneuro.io import JsonResponseFunctionResource, NiftiVolumeResource
 
 import ants
 import nibabel as nib
@@ -50,6 +54,26 @@ class VolumeResource(Resource):
     @abstractmethod
     def load(self) -> InMemoryVolumeResource:
         """Load volume into memory"""
+
+    # ------------------------------------------------------------------
+    # Cache protocol — used by @cacheable when the return type is a
+    # VolumeResource subclass.  Subclasses may override for custom names.
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def _cache_files(cls, step_name: str) -> list[str]:
+        return [f"{step_name}.nii.gz"]
+
+    def _cache_save(self, cache_dir: Path, step_name: str) -> None:
+        from kwneuro.io import NiftiVolumeResource
+
+        NiftiVolumeResource.save(self, cache_dir / f"{step_name}.nii.gz")
+
+    @classmethod
+    def _cache_load(cls, cache_dir: Path, step_name: str) -> NiftiVolumeResource:
+        from kwneuro.io import NiftiVolumeResource
+
+        return NiftiVolumeResource(cache_dir / f"{step_name}.nii.gz")
 
 
 @dataclass
@@ -284,3 +308,24 @@ class InMemoryResponseFunctionResource(ResponseFunctionResource):
         """Return the stored response function as a DIPY `AxSymShResponse`."""
 
         return AxSymShResponse(S0=self.avg_signal, dwi_response=self.sh_coeffs)
+
+    # ------------------------------------------------------------------
+    # Cache protocol
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def _cache_files(cls, step_name: str) -> list[str]:
+        return [f"{step_name}.json"]
+
+    def _cache_save(self, cache_dir: Path, step_name: str) -> None:
+        from kwneuro.io import JsonResponseFunctionResource
+
+        JsonResponseFunctionResource.save(self, cache_dir / f"{step_name}.json")
+
+    @classmethod
+    def _cache_load(
+        cls, cache_dir: Path, step_name: str
+    ) -> JsonResponseFunctionResource:
+        from kwneuro.io import JsonResponseFunctionResource
+
+        return JsonResponseFunctionResource(cache_dir / f"{step_name}.json")

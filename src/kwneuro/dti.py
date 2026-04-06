@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import dipy.reconst.dti
 
+from kwneuro.cache import cacheable
 from kwneuro.io import NiftiVolumeResource
 from kwneuro.resource import InMemoryVolumeResource, VolumeResource
 from kwneuro.util import PathLike, update_volume_metadata
@@ -29,6 +31,22 @@ class Dti:
             volume=self.volume.load(),
         )
 
+    # ------------------------------------------------------------------
+    # Cache protocol
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def _cache_files(cls, step_name: str) -> list[str]:
+        # Fixed name avoids collision with Noddi (same step_name "estimate_from_dwi").
+        return ["dti.nii.gz"]
+
+    def _cache_save(self, cache_dir: Path, step_name: str) -> None:
+        self.save(cache_dir / "dti.nii.gz")
+
+    @classmethod
+    def _cache_load(cls, cache_dir: Path, step_name: str) -> Dti:
+        return cls(NiftiVolumeResource(cache_dir / "dti.nii.gz"))
+
     def save(self, path: PathLike) -> Dti:
         """Save all resources to disk and return a Dti with all resources being on-disk.
 
@@ -42,6 +60,7 @@ class Dti:
         )
 
     @staticmethod
+    @cacheable
     def estimate_from_dwi(dwi: Dwi, mask: VolumeResource | None = None) -> Dti:
         """Estimate a DTI from a DWI.
 
