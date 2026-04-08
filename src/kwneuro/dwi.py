@@ -241,7 +241,7 @@ class Dwi:
 
     def estimate_dti(self, mask: VolumeResource | None = None) -> Dti:
         """Estimate diffusion tensor image from this DWI"""
-        return Dti.estimate_dti(self, mask)
+        return Dti.estimate_dti(self, mask)  # type: ignore[no-any-return]
 
     def estimate_noddi(
         self,
@@ -250,7 +250,7 @@ class Dwi:
         n_kernel_dirs: int = 500,
     ) -> Noddi:
         """Estimate NODDI model parameters from this DWI. See :meth:`kwneuro.noddi.Noddi.estimate_noddi` for details."""
-        return Noddi.estimate_noddi(self, mask, dpar, n_kernel_dirs)
+        return Noddi.estimate_noddi(self, mask, dpar, n_kernel_dirs)  # type: ignore[no-any-return]
 
 
 def subsample_dwi(dwi: Dwi, factor: int = 2) -> Dwi:
@@ -266,5 +266,5 @@ def subsample_dwi(dwi: Dwi, factor: int = 2) -> Dwi:
     )
 
 
-Dwi.denoise = cacheable(Dwi.denoise)
-Dwi.extract_brain = cacheable(Dwi.extract_brain)
+Dwi.denoise = cacheable(Dwi.denoise)  # type: ignore[method-assign]
+Dwi.extract_brain = cacheable(Dwi.extract_brain)  # type: ignore[method-assign]

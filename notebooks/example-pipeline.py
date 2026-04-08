@@ -352,7 +352,7 @@ print(f"Results saved to {output_dir.resolve()}")
 # %% [markdown]
 # ## Pipeline caching
 #
-# Wrapping pipeline steps in a `PipelineCache` context saves results to disk
+# Wrapping pipeline steps in a `Cache` context saves results to disk
 # on the first run and reloads them automatically on subsequent runs, skipping
 # the underlying computation. Scalar parameters (`int`, `float`, `str`, `bool`)
 # are fingerprinted automatically — changing them invalidates only that step's
@@ -361,13 +361,13 @@ print(f"Results saved to {output_dir.resolve()}")
 # all steps.
 
 # %%
-from kwneuro.cache import PipelineCache
+from kwneuro.cache import Cache
 from kwneuro.dti import Dti
 from kwneuro.noddi import Noddi
 
 cache_dir = Path("cache")
 
-with PipelineCache(cache_dir) as pc:
+with Cache(cache_dir) as pc:
     dti_cached = dwi_denoised.estimate_dti(mask=mask)
     noddi_cached = dwi_denoised.estimate_noddi(mask=mask)
     _, peaks_cached = compute_csd_peaks(dwi_denoised, mask, response)
