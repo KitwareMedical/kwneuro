@@ -145,8 +145,8 @@ uv run pytest
 uv run ruff check .
 ```
 
-See
-[CONTRIBUTING.md](https://github.com/brain-microstructure-exploration-tools/kwneuro/blob/main/.github/CONTRIBUTING.md)
+See the
+[Developer Guide](https://kwneuro.readthedocs.io/en/latest/developer-guide.html)
 for the full guide, including a non-uv setup option.
 
 See the [GitHub Discussions][github-discussions-link] for questions and ideas,

@@ -5,6 +5,8 @@
 :hidden:
 
 getting-started
+developer-guide
+Tutorials <tutorials/index>
 API Reference <autoapi/index>
 ```
 

@@ -1,45 +1,29 @@
-# ---
-# jupyter:
-#   jupytext:
-#     text_representation:
-#       extension: .py
-#       format_name: percent
-#       format_version: '1.3'
-#       jupytext_version: 1.19.1
-#   kernelspec:
-#     display_name: Python 3 (ipykernel)
-#     language: python
-#     name: python3
-# ---
+# Harmonization of Multi-Site Data
 
-# %% [markdown]
-# # Harmonization of Multi-Site Data
-#
-# When brain images are acquired at different sites or on different scanners,
-# the resulting scalar measurements contain site-specific technical biases
-# that can mask or mimic real biological effects. **ComBat**
-# removes these additive and multiplicative site effects while preserving
-# biological covariates like age and sex.
-#
-# This notebook demonstrates the `harmonize_volumes` function on synthetic
-# data with known site biases and a known age effect.
-#
-# ## Pipeline overview
-#
-# 1. Generate synthetic multi-site scalar maps with known biases
-# 2. Visualize site effects before harmonization
-# 3. Run ComBat harmonization
-# 4. Compare before and after
-# 5. Verify that the biological (age) effect is preserved
+When brain images are acquired at different sites or on different scanners, the
+resulting scalar measurements contain site-specific technical biases that can
+mask or mimic real biological effects. **ComBat** removes these additive and
+multiplicative site effects while preserving biological covariates like age and
+sex.
 
-# %% [markdown]
-# ## 1. Generate synthetic multi-site data
-#
-# We create synthetic scalar volumes for 3 "sites" with 8 subjects each.
-# Each site has a different additive shift and multiplicative scale applied
-# on top of a shared biological signal (a smooth gradient + age effect).
+This notebook demonstrates the `harmonize_volumes` function on synthetic data
+with known site biases and a known age effect.
 
-# %%
+## Pipeline overview
+
+1. Generate synthetic multi-site scalar maps with known biases
+2. Visualize site effects before harmonization
+3. Run ComBat harmonization
+4. Compare before and after
+5. Verify that the biological (age) effect is preserved
+
+## 1. Generate synthetic multi-site data
+
+We create synthetic scalar volumes for 3 "sites" with 8 subjects each. Each site
+has a different additive shift and multiplicative scale applied on top of a
+shared biological signal (a smooth gradient + age effect).
+
+```python
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -89,13 +73,20 @@ for site in sites:
 covars = pd.DataFrame({"site": site_labels, "age": ages})
 print(f"Generated {len(volumes)} volumes across {len(sites)} sites")
 print(covars.groupby("site")["age"].describe()[["count", "mean", "std"]])
+```
 
-# %% [markdown]
-# ## 2. Visualize site effects before harmonization
-#
-# Each site's voxel-value distribution is shifted and scaled differently.
+    Generated 24 volumes across 3 sites
+               count       mean        std
+    site
+    Scanner_A    8.0  54.924903  15.648836
+    Scanner_B    8.0  57.283493  12.979633
+    Scanner_C    8.0  52.865805  12.695440
 
-# %%
+## 2. Visualize site effects before harmonization
+
+Each site's voxel-value distribution is shifted and scaled differently.
+
+```python
 mask_idx = np.nonzero(mask_array > 0)
 mid_slice = shape[2] // 2
 
@@ -127,11 +118,13 @@ for i, site in enumerate(sites):
 
 plt.tight_layout()
 plt.show()
+```
 
-# %% [markdown]
-# ## 3. Run ComBat harmonization
+![png](example-harmonization_files/example-harmonization_4_0.png)
 
-# %%
+## 3. Run ComBat harmonization
+
+```python
 from kwneuro.harmonize import harmonize_volumes
 
 harmonized, estimates = harmonize_volumes(
@@ -143,13 +136,20 @@ harmonized, estimates = harmonize_volumes(
 )
 
 print(f"Harmonized {len(harmonized)} volumes")
+```
 
-# %% [markdown]
-# ## 4. Compare before and after
-#
-# After harmonization, the per-site distributions should overlap.
+    [neuroCombat] Creating design matrix
+    [neuroCombat] Standardizing data across features
+    [neuroCombat] Fitting L/S model and finding priors
+    [neuroCombat] Finding parametric adjustments
+    [neuroCombat] Final adjustment of data
+    Harmonized 24 volumes
 
-# %%
+## 4. Compare before and after
+
+After harmonization, the per-site distributions should overlap.
+
+```python
 fig, axes = plt.subplots(1, 4, figsize=(14, 3), width_ratios=[3, 1, 1, 1])
 
 for site, color in zip(sites, ["tab:blue", "tab:orange", "tab:green"]):
@@ -193,14 +193,21 @@ for site in sites:
         f"  {site:12s}  before: {np.mean(before_means):.4f}  "
         f"after: {np.mean(after_means):.4f}"
     )
+```
 
-# %% [markdown]
-# ## 5. Verify covariate preservation
-#
-# The age effect should survive harmonization. We check the correlation
-# between age and mean voxel intensity before and after.
+![png](example-harmonization_files/example-harmonization_8_0.png)
 
-# %%
+    Per-site mean voxel values:
+      Scanner_A     before: 0.3348  after: 0.3640
+      Scanner_B     before: 0.6254  after: 0.3685
+      Scanner_C     before: 0.1315  after: 0.3595
+
+## 5. Verify covariate preservation
+
+The age effect should survive harmonization. We check the correlation between
+age and mean voxel intensity before and after.
+
+```python
 means_before = [v.get_array()[mask_idx].mean() for v in volumes]
 means_after = [v.get_array()[mask_idx].mean() for v in harmonized]
 
@@ -232,3 +239,9 @@ plt.show()
 
 print(f"Age correlation before: {corr_before:.4f}")
 print(f"Age correlation after:  {corr_after:.4f}")
+```
+
+![png](example-harmonization_files/example-harmonization_10_0.png)
+
+    Age correlation before: 0.2661
+    Age correlation after:  0.9691

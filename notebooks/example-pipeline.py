@@ -14,7 +14,7 @@
 # ---
 
 # %% [markdown]
-# # kwneuro: Diffusion MRI Microstructure Example Pipeline
+# # Single-Subject Microstructure Pipeline
 #
 # This notebook demonstrates the main capabilities of the `kwneuro` package
 # for extracting brain microstructure parameters from diffusion MRI data.
