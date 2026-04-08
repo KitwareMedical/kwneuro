@@ -23,12 +23,16 @@ All commands use [uv](https://docs.astral.sh/uv/). The project has a committed
 ### Setup
 
 ```bash
-# Install in editable mode with dev dependencies
+# Install in editable mode with dev dependencies (includes all optional extras)
 uv sync --extra dev
 
 # Install pre-commit hooks
 uv run pre-commit install
 ```
+
+Note: `uv sync --extra dev` installs all optional extras (HD-BET, TractSeg,
+AMICO, neuroCombat) via the `all` extra. CI uses `uv sync --extra test` which
+only installs neuroCombat (the other optional deps are mocked in tests).
 
 ### Testing
 
@@ -172,7 +176,7 @@ objects return new domain objects:
    - `denoise_dwi(dwi: Dwi) -> InMemoryVolumeResource`
    - Uses DIPY's Patch2Self algorithm
 
-2. **Masking** (`src/kwneuro/masks.py`):
+2. **Masking** (`src/kwneuro/masks.py`) — requires `kwneuro[hdbet]`:
    - `brain_extract_batch(cases: list[tuple[Dwi, Path]]) -> list[NiftiVolumeResource]`
    - `brain_extract_single(dwi: Dwi, output_path: PathLike) -> NiftiVolumeResource`
    - Uses HD-BET (deep learning) on mean b0 images
@@ -185,7 +189,7 @@ objects return new domain objects:
    - Returns 6 values per voxel (lower triangular of symmetric tensor)
    - Provides derived maps: `get_fa_md()`, `get_eig()`
 
-4. **NODDI Estimation** (`src/kwneuro/noddi.py`):
+4. **NODDI Estimation** (`src/kwneuro/noddi.py`) — requires `kwneuro[noddi]`:
    - `Noddi.estimate_from_dwi(dwi: Dwi, mask, dpar, n_kernel_dirs) -> Noddi`
    - Uses AMICO library
    - Outputs NDI (neurite density), ODI (orientation dispersion), FWF (free
@@ -224,13 +228,13 @@ objects return new domain objects:
    - `build_multi_metric_template(subject_list, ...) -> Mapping[str, InMemoryVolumeResource]`
      - Multi-modality variant using multivariate ANTs registration
 
-8. **Tract Segmentation** (`src/kwneuro/tractseg.py`):
+8. **Tract Segmentation** (`src/kwneuro/tractseg.py`) — requires `kwneuro[tractseg]`:
    - `extract_tractseg(dwi, mask, response, output_type) -> VolumeResource`
      - Computes CSD peaks, then runs TractSeg
      - `output_type`: `"tract_segmentation"`, `"endings_segmentation"`, or
        `"TOM"`
 
-9. **Harmonization** (`src/kwneuro/harmonize.py`):
+9. **Harmonization** (`src/kwneuro/harmonize.py`) — requires `kwneuro[combat]`:
    - `harmonize_volumes(volumes, covars, batch_col, mask, ...) -> tuple[list[InMemoryVolumeResource], CombatEstimates]`
      - Wraps neuroCombat for multi-site ComBat harmonization
      - Operates on 3D scalar maps (FA, MD, NDI, etc.) in common space
@@ -366,17 +370,29 @@ When combining multiple `Dwi` objects:
 ### Core
 
 - **dipy** (>=1.9): Diffusion imaging toolkit
-- **dmri-amico** (==2.1.0): NODDI model fitting
-- **hd-bet** (==2.0.1): Deep learning brain extraction
 - **nibabel**: NIfTI file I/O
 - **click**: CLI framework
 - **antspyx** (>=0.6.2): Registration and template building
-- **TractSeg**: White matter tract segmentation
-- **neuroCombat** (==0.2.12): ComBat harmonization for multi-site data
+
+### Optional (pip extras)
+
+These are heavier or more fragile dependencies that are opt-in. Each has a
+corresponding pip extra:
+
+- **hd-bet** (==2.0.1): Deep learning brain extraction — `pip install kwneuro[hdbet]`
+- **dmri-amico** (==2.1.1): NODDI model fitting — `pip install kwneuro[noddi]`
+- **TractSeg**: White matter tract segmentation — `pip install kwneuro[tractseg]`
+- **neuroCombat** (==0.2.12): ComBat harmonization — `pip install kwneuro[combat]`
+- Install all at once with `pip install kwneuro[all]`
+
+Source modules use lazy imports: the optional dependency is only imported inside
+the function that needs it, and raises `ImportError` with install instructions
+if missing.
 
 ### Pinned Versions
 
 - AMICO and HD-BET are pinned due to API stability concerns
-- `backports.tarfile` required for older amico/setuptools compatibility
+- `backports.tarfile` required for older amico/setuptools compatibility (in the
+  `noddi` extra)
 - neuroCombat is pinned because the library is dormant (no releases since 2021)
   and we want Dependabot to flag any unexpected new release
