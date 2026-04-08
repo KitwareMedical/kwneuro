@@ -14,7 +14,7 @@
 # ---
 
 # %% [markdown]
-# # kwneuro: Group Registration and Population Template Construction
+# # Population Template Construction
 #
 # This notebook demonstrates how to build population-level templates from
 # individual subject volumes using the `kwneuro` registration tools.
