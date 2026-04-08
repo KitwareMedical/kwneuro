@@ -9,7 +9,6 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from neuroCombat import neuroCombat as _run_combat
 from numpy.typing import NDArray
 
 from kwneuro.resource import InMemoryVolumeResource, VolumeResource
@@ -212,6 +211,15 @@ def harmonize_volumes(
         len(loaded_volumes),
         n_batches,
     )
+
+    try:
+        from neuroCombat import neuroCombat as _run_combat
+    except ImportError:
+        msg = (
+            "neuroCombat is required for harmonization but is not installed. "
+            "Install it with: pip install kwneuro[combat]"
+        )
+        raise ImportError(msg) from None
 
     dat, mask_indices = _flatten_volumes(loaded_volumes, mask_array)
 

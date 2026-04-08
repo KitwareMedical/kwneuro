@@ -37,7 +37,9 @@ Diffusion MRI analysis typically requires stitching together several packages
 file conventions, and coordinate quirks. kwneuro wraps the best of these tools
 behind a single, pip-installable Python interface so you can:
 
-- **Get started fast** -- no system-level dependencies to configure.
+- **Get started fast** -- core analysis (DTI, CSD, registration, template
+  building) works out of the box. Additional tools (brain extraction, NODDI,
+  tract segmentation, harmonization) are available as optional extras.
 - **Swap models easily** -- go from DTI to NODDI to CSD without rewriting your
   script.
 - **Work lazily or eagerly** -- data stays on disk until you call `.load()`, so
@@ -52,7 +54,17 @@ friction.
 ## Installation
 
 ```bash
-pip install kwneuro
+pip install kwneuro             # Core (DTI, CSD, registration, templates)
+pip install kwneuro[all]        # Everything including optional extras
+```
+
+Individual optional extras can also be installed separately:
+
+```bash
+pip install kwneuro[hdbet]      # Brain extraction (HD-BET)
+pip install kwneuro[noddi]      # NODDI estimation (AMICO)
+pip install kwneuro[tractseg]   # Tract segmentation (TractSeg)
+pip install kwneuro[combat]     # ComBat harmonization (neuroCombat)
 ```
 
 Requires Python 3.10+.
@@ -70,15 +82,14 @@ dwi = Dwi(
     FslBvecResource("sub-01_dwi.bvec"),
 ).load()
 
-# Denoise and extract a brain mask
+# Denoise and fit DTI (core -- no extras needed)
 dwi = dwi.denoise()
-mask = dwi.extract_brain()
-
-# Fit DTI and get FA / MD maps
-dti = dwi.estimate_dti(mask=mask)
+dti = dwi.estimate_dti()
 fa, md = dti.get_fa_md()
 
-# Fit NODDI (needs multi-shell data)
+# Brain extraction and NODDI require optional extras:
+#   pip install kwneuro[hdbet,noddi]
+mask = dwi.extract_brain()
 noddi = dwi.estimate_noddi(mask=mask)
 
 # Save everything to disk
@@ -89,17 +100,17 @@ noddi.save("output/noddi.nii.gz")
 
 ## What's included
 
-| Capability             | What it does                                                      | Powered by  |
-| ---------------------- | ----------------------------------------------------------------- | ----------- |
-| **Denoising**          | Patch2Self self-supervised denoising                              | DIPY        |
-| **Brain extraction**   | Deep-learning brain masking from mean b=0                         | HD-BET      |
-| **DTI**                | Tensor fitting, FA, MD, eigenvalue decomposition                  | DIPY        |
-| **NODDI**              | Neurite density, orientation dispersion, free water fraction      | AMICO       |
-| **CSD**                | Fiber orientation distributions and peak extraction               | DIPY        |
-| **Tract segmentation** | 72 white-matter bundles from CSD peaks                            | TractSeg    |
-| **Registration**       | Pairwise registration (rigid, affine, SyN)                        | ANTs        |
-| **Template building**  | Iterative unbiased population templates (single- or multi-metric) | ANTs        |
-| **Harmonization**      | ComBat site-effect removal for multi-site scalar maps             | neuroCombat |
+| Capability             | What it does                                                      | Powered by  | Extra        |
+| ---------------------- | ----------------------------------------------------------------- | ----------- | ------------ |
+| **Denoising**          | Patch2Self self-supervised denoising                              | DIPY        |              |
+| **Brain extraction**   | Deep-learning brain masking from mean b=0                         | HD-BET      | `[hdbet]`    |
+| **DTI**                | Tensor fitting, FA, MD, eigenvalue decomposition                  | DIPY        |              |
+| **NODDI**              | Neurite density, orientation dispersion, free water fraction      | AMICO       | `[noddi]`    |
+| **CSD**                | Fiber orientation distributions and peak extraction               | DIPY        |              |
+| **Tract segmentation** | 72 white-matter bundles from CSD peaks                            | TractSeg    | `[tractseg]` |
+| **Registration**       | Pairwise registration (rigid, affine, SyN)                        | ANTs        |              |
+| **Template building**  | Iterative unbiased population templates (single- or multi-metric) | ANTs        |              |
+| **Harmonization**      | ComBat site-effect removal for multi-site scalar maps             | neuroCombat | `[combat]`   |
 
 <!-- GETTING-STARTED-END -->
 

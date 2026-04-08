@@ -5,8 +5,6 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import torch
-
 from kwneuro.io import NiftiVolumeResource
 from kwneuro.util import PathLike, normalize_path
 
@@ -31,6 +29,15 @@ def _run_hd_bet(
         Default is to use it if the device is GPU and omit it if the device is CPU; this is HD-BET's recommendation.
     """
 
+    try:
+        import torch
+    except ImportError:
+        msg = (
+            "HD-BET requires PyTorch but it is not installed. "
+            "Install it with: pip install kwneuro[hdbet]"
+        )
+        raise ImportError(msg) from None
+
     if device is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
     if use_tta is None:
@@ -53,13 +60,15 @@ def _run_hd_bet(
         raise FileNotFoundError(msg)
 
     logging.debug("Loading HD_BET")
-    # don't import till now since it takes time to initialize.
-    from HD_BET.checkpoint_download import (  # pylint: disable=import-outside-toplevel  # noqa: PLC0415
-        maybe_download_parameters,
-    )
-    from HD_BET.hd_bet_prediction import (  # pylint: disable=import-outside-toplevel  # noqa: PLC0415
-        get_hdbet_predictor,
-    )
+    try:
+        from HD_BET.checkpoint_download import maybe_download_parameters
+        from HD_BET.hd_bet_prediction import get_hdbet_predictor
+    except ImportError:
+        msg = (
+            "HD-BET is required for brain extraction but is not installed. "
+            "Install it with: pip install kwneuro[hdbet]"
+        )
+        raise ImportError(msg) from None
 
     maybe_download_parameters()
     predictor = get_hdbet_predictor(
