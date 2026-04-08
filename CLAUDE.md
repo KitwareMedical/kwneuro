@@ -77,7 +77,15 @@ uv run --extra docs sphinx-build -n -T docs docs/_build/html
 
 # Live rebuild docs
 uv run --extra docs sphinx-autobuild -n -T docs docs/_build/html
+
+# Rebuild tutorial pages from notebooks (needs notebook extras)
+uv run --extra notebooks --extra all python scripts/update-notebook-pages.py
 ```
+
+The developer guide lives at `docs/developer-guide.md` (canonical source;
+`.github/CONTRIBUTING.md` is a thin redirect). Tutorial pages under
+`docs/tutorials/` are pre-rendered from `notebooks/*.py` via the
+`scripts/update-notebook-pages.py` script and committed to git.
 
 ### Package Build
 
