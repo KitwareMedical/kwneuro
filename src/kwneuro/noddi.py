@@ -5,8 +5,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import amico
-
 from kwneuro.io import FslBvalResource, FslBvecResource, NiftiVolumeResource
 from kwneuro.resource import InMemoryVolumeResource, VolumeResource
 from kwneuro.util import (
@@ -78,6 +76,15 @@ class Noddi:
 
         Returns: A Noddi resource containing the estimated parameters.
         """
+        try:
+            import amico
+        except ImportError:
+            msg = (
+                "AMICO is required for NODDI estimation but is not installed. "
+                "Install it with: pip install kwneuro[noddi]"
+            )
+            raise ImportError(msg) from None
+
         amico.setup()
         with tempfile.TemporaryDirectory() as tmpdir:
             ae = amico.Evaluation(output_path=tmpdir)

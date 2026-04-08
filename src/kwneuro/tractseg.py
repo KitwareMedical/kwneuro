@@ -3,14 +3,27 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from tractseg.python_api import run_tractseg
-
 from kwneuro.csd import combine_csd_peaks_to_vector_volume, compute_csd_peaks
 from kwneuro.resource import ResponseFunctionResource, VolumeResource
 from kwneuro.util import create_estimate_volume_resource
 
 if TYPE_CHECKING:
+    import numpy as np
+
     from kwneuro.dwi import Dwi
+
+
+def _call_tractseg(data: np.ndarray, output_type: str) -> np.ndarray:
+    """Call TractSeg, handling the lazy import."""
+    try:
+        from tractseg.python_api import run_tractseg
+    except ImportError:
+        msg = (
+            "TractSeg is required for tract segmentation but is not installed. "
+            "Install it with: pip install kwneuro[tractseg]"
+        )
+        raise ImportError(msg) from None
+    return run_tractseg(data=data, output_type=output_type)
 
 
 def extract_tractseg(
@@ -50,7 +63,7 @@ def extract_tractseg(
     )
     # Run TractSeg
     logging.info("Running tractseg...")
-    segmentation = run_tractseg(
+    segmentation = _call_tractseg(
         data=csd_peaks_vector.get_array(), output_type=output_type
     )
 

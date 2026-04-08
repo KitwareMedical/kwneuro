@@ -25,6 +25,7 @@ classifiers = [
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Topic :: Scientific/Engineering",
   "Typing :: Typed",
 ]
@@ -34,24 +35,36 @@ dependencies = [
   "numpy <2.4",
   "dipy >=1.9",
   "pandas",
+  "antspyx>=0.6.2",
+]
+
+[project.optional-dependencies]
+hdbet = [
   "hd-bet == 2.0.1",
+]
+tractseg = [
+  "TractSeg",
+]
+noddi = [
   "dmri-amico == 2.1.1",
   # Required because older amico/setuptools dependency chain
   # imports backports.tarfile (can be removed if amico drops it)
   "backports.tarfile",
-  "TractSeg",
-  "antspyx>=0.6.2",
+]
+combat = [
   "neuroCombat ==0.2.12",
 ]
-
-[project.optional-dependencies]
+all = [
+  "kwneuro[hdbet,tractseg,noddi,combat]",
+]
 test = [
   "pytest >=6",
   "pytest-cov >=3",
   "pytest-mock >=3.14",
+  "kwneuro[combat]",
 ]
 dev = [
-  "kwneuro[test]",
+  "kwneuro[test,all]",
   "pre-commit",
   "pylint",
 ]
@@ -125,7 +138,7 @@ disallow_untyped_defs = true
 disallow_incomplete_defs = true
 
 [[tool.mypy.overrides]]
-module = "neuroCombat.*"
+module = ["neuroCombat.*", "HD_BET.*", "tractseg.*", "amico.*"]
 ignore_missing_imports = true
 
 
@@ -160,7 +173,8 @@ ignore = [
   "PLR09",    # Too many <...>
   "PLR2004",  # Magic value used in comparison
   "ISC001",   # Conflicts with formatter
-  "PLC3002", # Direct call of lambda -- this can often aid code clarity in my opinion
+  "PLC3002",  # Direct call of lambda -- this can often aid code clarity in my opinion
+  "PLC0415",  # import-outside-toplevel -- lazy imports are an intentional pattern for optional deps
 ]
 isort.required-imports = ["from __future__ import annotations"]
 # Uncomment if using a _compat.typing backport
@@ -178,6 +192,7 @@ similarities.ignore-imports = "yes"
 messages_control.disable = [
   "design",
   "fixme",
+  "import-outside-toplevel",
   "line-too-long",
   "missing-module-docstring",
   "wrong-import-position",

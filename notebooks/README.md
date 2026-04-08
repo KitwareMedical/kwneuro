@@ -6,28 +6,31 @@ CI linting.
 
 ## Running a notebook
 
-Install the notebook dependencies with
-[uv](https://docs.astral.sh/uv/getting-started/installation/), then open a
-notebook:
+From the `notebooks/` directory, first convert the Jupytext `.py` files to
+`.ipynb` (one-time step, no project dependencies needed):
 
-```console
-$ uv sync --extra notebooks
-$ cd notebooks
-$ uv run jupytext --to notebook example-pipeline.py
-$ uv run jupyter notebook example-pipeline.ipynb
+```bash
+cd notebooks
+uv run --with jupytext jupytext --to ipynb *.py
 ```
 
-Or, if you have Jupytext's Jupyter extension enabled, simply open the `.py` file
-directly in Jupyter:
+Then open a specific notebook with exactly the extras it needs:
 
-```console
-$ uv run jupyter notebook example-pipeline.py
+```bash
+uv run --extra notebooks --extra hdbet --extra noddi --extra tractseg \
+    jupyter notebook example-pipeline.ipynb
+
+uv run --extra notebooks --extra combat \
+    jupyter notebook example-harmonization.ipynb
+
+uv run --extra notebooks \
+    jupyter notebook example-group-template.ipynb
 ```
 
 ### Without uv
 
 ```bash
-pip install -e ".[notebooks]"
+pip install -e ".[notebooks,all]"
 cd notebooks
 jupytext --to notebook example-pipeline.py
 jupyter notebook example-pipeline.ipynb

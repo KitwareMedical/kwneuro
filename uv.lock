@@ -2686,27 +2686,37 @@ name = "kwneuro"
 source = { editable = "." }
 dependencies = [
     { name = "antspyx" },
-    { name = "backports-tarfile" },
     { name = "click" },
     { name = "dipy", version = "1.11.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "dipy", version = "1.12.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "dmri-amico" },
-    { name = "hd-bet" },
-    { name = "neurocombat" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "numpy", version = "2.3.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "pandas", version = "2.3.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "pandas", version = "3.0.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "tractseg" },
 ]
 
 [package.optional-dependencies]
+all = [
+    { name = "backports-tarfile" },
+    { name = "dmri-amico" },
+    { name = "hd-bet" },
+    { name = "neurocombat" },
+    { name = "tractseg" },
+]
+combat = [
+    { name = "neurocombat" },
+]
 dev = [
+    { name = "backports-tarfile" },
+    { name = "dmri-amico" },
+    { name = "hd-bet" },
+    { name = "neurocombat" },
     { name = "pre-commit" },
     { name = "pylint" },
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "pytest-mock" },
+    { name = "tractseg" },
 ]
 docs = [
     { name = "furo" },
@@ -2720,6 +2730,13 @@ docs = [
     { name = "sphinx-click" },
     { name = "sphinx-copybutton" },
 ]
+hdbet = [
+    { name = "hd-bet" },
+]
+noddi = [
+    { name = "backports-tarfile" },
+    { name = "dmri-amico" },
+]
 notebooks = [
     { name = "ipykernel" },
     { name = "ipywidgets" },
@@ -2728,27 +2745,33 @@ notebooks = [
     { name = "notebook" },
 ]
 test = [
+    { name = "neurocombat" },
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "pytest-mock" },
+]
+tractseg = [
+    { name = "tractseg" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "antspyx", specifier = ">=0.6.2" },
-    { name = "backports-tarfile" },
+    { name = "backports-tarfile", marker = "extra == 'noddi'" },
     { name = "click", specifier = ">=8.1" },
     { name = "dipy", specifier = ">=1.9" },
-    { name = "dmri-amico", specifier = "==2.1.1" },
+    { name = "dmri-amico", marker = "extra == 'noddi'", specifier = "==2.1.1" },
     { name = "furo", marker = "extra == 'docs'", specifier = ">=2023.8.17" },
-    { name = "hd-bet", specifier = "==2.0.1" },
+    { name = "hd-bet", marker = "extra == 'hdbet'", specifier = "==2.0.1" },
     { name = "ipykernel", marker = "extra == 'notebooks'" },
     { name = "ipywidgets", marker = "extra == 'notebooks'" },
     { name = "jupytext", marker = "extra == 'notebooks'" },
-    { name = "kwneuro", extras = ["test"], marker = "extra == 'dev'" },
+    { name = "kwneuro", extras = ["all", "test"], marker = "extra == 'dev'" },
+    { name = "kwneuro", extras = ["combat"], marker = "extra == 'test'" },
+    { name = "kwneuro", extras = ["combat", "hdbet", "noddi", "tractseg"], marker = "extra == 'all'" },
     { name = "matplotlib", marker = "extra == 'notebooks'" },
     { name = "myst-parser", marker = "extra == 'docs'", specifier = ">=0.13" },
-    { name = "neurocombat", specifier = "==0.2.12" },
+    { name = "neurocombat", marker = "extra == 'combat'", specifier = "==0.2.12" },
     { name = "notebook", marker = "extra == 'notebooks'" },
     { name = "numpy", specifier = "<2.4" },
     { name = "pandas" },
@@ -2762,9 +2785,9 @@ requires-dist = [
     { name = "sphinx-autobuild", marker = "extra == 'docs'", specifier = "==2024.10.3" },
     { name = "sphinx-click", marker = "extra == 'docs'" },
     { name = "sphinx-copybutton", marker = "extra == 'docs'" },
-    { name = "tractseg" },
+    { name = "tractseg", marker = "extra == 'tractseg'" },
 ]
-provides-extras = ["test", "dev", "notebooks", "docs"]
+provides-extras = ["hdbet", "tractseg", "noddi", "combat", "all", "test", "dev", "notebooks", "docs"]
 
 [[package]]
 name = "lark"

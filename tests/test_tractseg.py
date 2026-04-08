@@ -77,7 +77,7 @@ def test_tractseg(
     # Mock tractseg output
     mock_tractseg_output = np.ones((*vol_shape, 72))
     mocker_run_tract_seg = mocker.patch(
-        "kwneuro.tractseg.run_tractseg", return_value=mock_tractseg_output
+        "kwneuro.tractseg._call_tractseg", return_value=mock_tractseg_output
     )
 
     response = None if response_is_none else response_function
