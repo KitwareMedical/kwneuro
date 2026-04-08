@@ -11,6 +11,7 @@ from scipy.linalg import expm
 
 from kwneuro.cache import (
     Cache,
+    CacheSpec,
     _active_cache,
     cacheable,
 )
@@ -21,6 +22,7 @@ from kwneuro.noddi import Noddi
 from kwneuro.resource import (
     InMemoryBvalResource,
     InMemoryBvecResource,
+    InMemoryResponseFunctionResource,
     InMemoryVolumeResource,
 )
 
@@ -124,24 +126,46 @@ def test_is_cached_forced_overrides_present(tmp_path: Path) -> None:
     assert not pc.is_cached("step", ["out.txt"])
 
 
-def test_is_cached_params_match(tmp_path: Path) -> None:
+def test_is_cached_scalars_match(tmp_path: Path) -> None:
     (tmp_path / "out.txt").write_text("x")
-    (tmp_path / "step.params.json").write_text(json.dumps({"x": 1}, sort_keys=True))
+    (tmp_path / "step.params.json").write_text(
+        json.dumps({"scalars": {"x": 1}}, sort_keys=True)
+    )
     pc = Cache(tmp_path)
-    assert pc.is_cached("step", ["out.txt"], params={"x": 1})
+    assert pc.is_cached("step", ["out.txt"], scalars={"x": 1})
 
 
-def test_is_cached_params_mismatch(tmp_path: Path) -> None:
+def test_is_cached_scalars_mismatch(tmp_path: Path) -> None:
     (tmp_path / "out.txt").write_text("x")
-    (tmp_path / "step.params.json").write_text(json.dumps({"x": 1}, sort_keys=True))
+    (tmp_path / "step.params.json").write_text(
+        json.dumps({"scalars": {"x": 1}}, sort_keys=True)
+    )
     pc = Cache(tmp_path)
-    assert not pc.is_cached("step", ["out.txt"], params={"x": 99})
+    assert not pc.is_cached("step", ["out.txt"], scalars={"x": 99})
 
 
 def test_is_cached_params_file_missing_is_miss(tmp_path: Path) -> None:
     (tmp_path / "out.txt").write_text("x")
     pc = Cache(tmp_path)
-    assert not pc.is_cached("step", ["out.txt"], params={"x": 1})
+    assert not pc.is_cached("step", ["out.txt"], scalars={"x": 1})
+
+
+def test_is_cached_hashes_match(tmp_path: Path) -> None:
+    (tmp_path / "out.txt").write_text("x")
+    (tmp_path / "step.params.json").write_text(
+        json.dumps({"hashes": {"arr": "abc123"}}, sort_keys=True)
+    )
+    pc = Cache(tmp_path)
+    assert pc.is_cached("step", ["out.txt"], hashes={"arr": "abc123"})
+
+
+def test_is_cached_hashes_mismatch(tmp_path: Path) -> None:
+    (tmp_path / "out.txt").write_text("x")
+    (tmp_path / "step.params.json").write_text(
+        json.dumps({"hashes": {"arr": "abc123"}}, sort_keys=True)
+    )
+    pc = Cache(tmp_path)
+    assert not pc.is_cached("step", ["out.txt"], hashes={"arr": "different"})
 
 
 # ---------------------------------------------------------------------------
@@ -302,6 +326,9 @@ def _make_amico_mock(mocker, rng: np.random.Generator) -> MagicMock:
 
     The @cacheable wrapper on estimate_noddi is left intact so that caching
     behaviour can be tested end-to-end.
+
+    AMICO is an optional pip extra. A fake `amico` module is injected into
+    `sys.modules` so these tests run even when AMICO is not installed.
     """
     mock_ae = MagicMock()
     mock_ae.RESULTS = {
@@ -309,9 +336,17 @@ def _make_amico_mock(mocker, rng: np.random.Generator) -> MagicMock:
         "DIRs": rng.random(size=(3, 4, 5, 3)).astype(np.float32),
     }
     mock_ae.model.maps_name = ["NDI", "ODI", "FWF"]
-    mocker.patch("kwneuro.noddi.amico.setup")
-    mocker.patch("kwneuro.noddi.amico.Evaluation", return_value=mock_ae)
-    mocker.patch("kwneuro.noddi.amico.util.fsl2scheme")
+    # amico is imported inside Noddi.estimate_noddi as ``import amico``. Since
+    # amico is an optional pip extra that may not be installed, we inject fake
+    # module objects into sys.modules first so that ``import amico`` succeeds,
+    # then patch the individual attributes the function actually calls.
+    mock_amico_module = MagicMock()
+    mock_amico_util = MagicMock()
+    mocker.patch.dict(
+        "sys.modules", {"amico": mock_amico_module, "amico.util": mock_amico_util}
+    )
+    mock_amico_module.Evaluation.return_value = mock_ae
+    mock_amico_module.util = mock_amico_util
     return mock_ae
 
 
@@ -394,7 +429,13 @@ def test_compute_csd_peaks_with_caching(dwi3: Dwi, mocker, tmp_path: Path) -> No
         array=np.ones((3, 4, 5), dtype=np.float32),
         affine=dwi3.volume.get_affine(),
     )
-    mock_response = MagicMock()
+    # Use a real InMemoryResponseFunctionResource so it is content-fingerprinted
+    # rather than triggering an untracked-parameter warning (warnings are errors
+    # in this test suite).
+    mock_response = InMemoryResponseFunctionResource(
+        sh_coeffs=np.zeros(5, dtype=np.float64),
+        avg_signal=np.float32(1.0),
+    )
 
     pc = Cache(tmp_path)
     with pc:
@@ -434,3 +475,64 @@ def test_denoise_with_caching(dwi4: Dwi, tmp_path: Path) -> None:
     with pc:
         denoised_cached = dwi4.denoise()
     assert np.allclose(denoised_cached.volume.get_array(), denoised.volume.get_array())
+
+
+# ---------------------------------------------------------------------------
+# Content fingerprinting
+# ---------------------------------------------------------------------------
+
+
+def test_params_json_has_scalars_and_hashes(dwi3: Dwi, tmp_path: Path) -> None:
+    """The params sidecar contains separate 'scalars' and 'hashes' sections."""
+    with Cache(tmp_path):
+        dwi3.estimate_dti()
+
+    params = json.loads((tmp_path / "estimate_dti.params.json").read_text())
+    # Scalar arguments (mask=None) are human-readable in the "scalars" section.
+    assert "scalars" in params
+    assert params["scalars"]["mask"] is None
+    # Non-scalar arguments (dwi, the Dwi dataclass) are sha256 fingerprints.
+    assert "hashes" in params
+    assert "dwi" in params["hashes"]
+    assert len(params["hashes"]["dwi"]) == 64  # sha256 hex digest is 64 chars
+
+
+def test_data_change_triggers_recompute(dwi3: Dwi, tmp_path: Path, mocker) -> None:
+    """Modifying the imaging array invalidates the cache even when scalar params are unchanged."""
+    pc = Cache(tmp_path)
+    with pc:
+        dwi3.estimate_dti()
+
+    save_spy = mocker.spy(Dti, "_cache_save")
+
+    # Mutate the underlying array — same scalar params, different data fingerprint.
+    assert isinstance(dwi3.volume, InMemoryVolumeResource)
+    dwi3.volume.array[0, 0, 0, 0] += 1.0
+
+    with pc:
+        dwi3.estimate_dti()
+
+    save_spy.assert_called_once()  # recomputed because the data hash changed
+
+
+def test_untracked_param_warns(tmp_path: Path) -> None:
+    """A UserWarning is issued for parameters that cannot be fingerprinted."""
+
+    class Opaque:
+        """Not a scalar, not a dataclass, not a numpy type — cannot be fingerprinted."""
+
+    def _save(result: str, d: Path) -> None:
+        (d / "out.txt").write_text(result)
+
+    @cacheable(  # type: ignore[untyped-decorator]
+        CacheSpec(
+            files=["out.txt"],
+            save=_save,
+            load=lambda d: (d / "out.txt").read_text(),
+        )
+    )
+    def fn(_x: object) -> str:
+        return "result"
+
+    with pytest.warns(UserWarning, match="cannot be fingerprinted"), Cache(tmp_path):
+        fn(Opaque())
