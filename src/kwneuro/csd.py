@@ -207,10 +207,10 @@ def compute_csd_fods(
     return coeffs
 
 
-@cacheable(
+@cacheable(  # type: ignore[untyped-decorator]
     CacheSpec(
         files=["csd_peak_dirs.nii.gz", "csd_peak_values.nii.gz"],
-        save=lambda result, d: (
+        save=lambda result, d: (  # type: ignore[arg-type]
             NiftiVolumeResource.save(result[0], d / "csd_peak_dirs.nii.gz"),
             NiftiVolumeResource.save(result[1], d / "csd_peak_values.nii.gz"),
         ),

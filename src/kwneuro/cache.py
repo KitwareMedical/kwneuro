@@ -12,7 +12,7 @@ from typing import Any, Generic, TypeVar
 
 T = TypeVar("T")
 
-_active_cache: contextvars.ContextVar[PipelineCache | None] = contextvars.ContextVar(
+_active_cache: contextvars.ContextVar[Cache | None] = contextvars.ContextVar(
     "_active_cache", default=None
 )
 
@@ -48,7 +48,7 @@ class _CacheInfo:
 
 
 @dataclass
-class PipelineCache:
+class Cache:
     """Context manager that activates caching for all ``@cacheable``-decorated
     functions within a ``with`` block.
 
@@ -69,7 +69,7 @@ class PipelineCache:
         self.cache_dir = Path(self.cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-    def __enter__(self) -> PipelineCache:
+    def __enter__(self) -> Cache:
         self._token = _active_cache.set(self)
         return self
 
@@ -139,12 +139,12 @@ def _resolve_return_type(fn: Callable[..., Any]) -> type | None:
     if ann is None:
         return None
     if not isinstance(ann, str):
-        return ann  # type: ignore[return-value]
+        return ann  # type: ignore[no-any-return]
     module = sys.modules.get(fn.__module__)
     if module is None:
         return None
     try:
-        return eval(ann, vars(module))
+        return eval(ann, vars(module))  # type: ignore[no-any-return]
     except Exception:
         return None
 
@@ -190,9 +190,9 @@ def _save_params(
     )
 
 
-def cacheable(fn_or_spec: Callable[..., Any] | CacheSpec[Any]) -> Any:  # type: ignore[return]
-    """Decorator that adds transparent caching when a :class:`PipelineCache`
-    context is active.  Outside a ``with PipelineCache(...)`` block the
+def cacheable(fn_or_spec: Callable[..., Any] | CacheSpec[Any]) -> Any:
+    """Decorator that adds transparent caching when a :class:`Cache`
+    context is active.  Outside a ``with Cache(...)`` block the
     function runs normally with no caching overhead.
 
     Two styles:
@@ -237,9 +237,9 @@ def cacheable(fn_or_spec: Callable[..., Any] | CacheSpec[Any]) -> Any:  # type: 
     # name isn't yet in the module namespace at decoration time.
     fn = fn_or_spec
     step_name = fn.__name__
-    _resolved_type: type | None = None
+    _resolved_type: Any = None
 
-    def _get_return_type() -> type:
+    def _get_return_type() -> Any:
         nonlocal _resolved_type
         if _resolved_type is None:
             rt = _resolve_return_type(fn)
