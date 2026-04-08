@@ -372,7 +372,7 @@ with PipelineCache(cache_dir) as pc:
     noddi_cached = dwi_denoised.estimate_noddi(mask=mask)
     _, peaks_cached = compute_csd_peaks(dwi_denoised, mask, response)
 
-status = pc.status([Dti.estimate_from_dwi, Noddi.estimate_from_dwi, compute_csd_peaks])
+status = pc.status([Dti.estimate_dti, Noddi.estimate_noddi, compute_csd_peaks])
 print("Cache status:")
 for step, is_cached in status.items():
     print(f"  {step}: {'cached' if is_cached else 'not cached'}")

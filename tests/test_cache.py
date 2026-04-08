@@ -214,8 +214,8 @@ def test_cacheable_raises_on_missing_protocol(tmp_path: Path) -> None:
 
 def test_cacheable_preserves_function_name() -> None:
     """@cacheable preserves __name__ on the wrapped function."""
-    assert Dti.estimate_from_dwi.__name__ == "estimate_from_dwi"
-    assert Noddi.estimate_from_dwi.__name__ == "estimate_from_dwi"
+    assert Dti.estimate_dti.__name__ == "estimate_dti"
+    assert Noddi.estimate_noddi.__name__ == "estimate_noddi"
     assert Dwi.denoise.__name__ == "denoise"
 
 
@@ -232,16 +232,16 @@ def test_cacheable_no_op_outside_context(dwi3: Dwi) -> None:
 
 def test_status_missing_shows_false(tmp_path: Path) -> None:
     pc = PipelineCache(tmp_path)
-    result = pc.status([Dti.estimate_from_dwi])
-    assert result["Dti.estimate_from_dwi"] is False
+    result = pc.status([Dti.estimate_dti])
+    assert result["Dti.estimate_dti"] is False
 
 
 def test_status_present_shows_true(dwi3: Dwi, tmp_path: Path) -> None:
     pc = PipelineCache(tmp_path)
     with pc:
         dwi3.estimate_dti()
-    result = pc.status([Dti.estimate_from_dwi])
-    assert result["Dti.estimate_from_dwi"] is True
+    result = pc.status([Dti.estimate_dti])
+    assert result["Dti.estimate_dti"] is True
 
 
 def test_status_non_cacheable_skipped(tmp_path: Path) -> None:
@@ -257,9 +257,9 @@ def test_status_multiple_steps(dwi3: Dwi, tmp_path: Path) -> None:
     pc = PipelineCache(tmp_path)
     with pc:
         dwi3.estimate_dti()
-    result = pc.status([Dti.estimate_from_dwi, Noddi.estimate_from_dwi])
-    assert result["Dti.estimate_from_dwi"] is True
-    assert result["Noddi.estimate_from_dwi"] is False
+    result = pc.status([Dti.estimate_dti, Noddi.estimate_noddi])
+    assert result["Dti.estimate_dti"] is True
+    assert result["Noddi.estimate_noddi"] is False
 
 
 # ---------------------------------------------------------------------------
@@ -275,8 +275,8 @@ def test_estimate_dti_with_caching(dwi3: Dwi, tmp_path: Path) -> None:
 
     assert np.allclose(dti.volume.get_affine(), dwi3.volume.get_affine())
     assert dti.volume.get_array().shape[:3] == (3, 4, 5)
-    assert (tmp_path / "dti.nii.gz").exists()
-    assert pc.status([Dti.estimate_from_dwi])["Dti.estimate_from_dwi"] is True
+    assert (tmp_path / "estimate_dti.nii.gz").exists()
+    assert pc.status([Dti.estimate_dti])["Dti.estimate_dti"] is True
 
     # Second call returns the same result loaded from cache
     with pc:
@@ -285,22 +285,22 @@ def test_estimate_dti_with_caching(dwi3: Dwi, tmp_path: Path) -> None:
 
 
 def test_estimate_dti_force_recompute(dwi3: Dwi, tmp_path: Path, mocker) -> None:
-    """force={"estimate_from_dwi"} causes DTI to recompute even when a cache exists."""
+    """force={"estimate_dti"} causes DTI to recompute even when a cache exists."""
     pc = PipelineCache(tmp_path)
     with pc:
         dwi3.estimate_dti()
 
     save_spy = mocker.spy(Dti, "_cache_save")
-    with PipelineCache(tmp_path, force={"estimate_from_dwi"}):
+    with PipelineCache(tmp_path, force={"estimate_dti"}):
         dwi3.estimate_dti()
 
     save_spy.assert_called_once()
 
 
 def _make_amico_mock(mocker, rng: np.random.Generator) -> MagicMock:
-    """Patch AMICO internals so Noddi.estimate_from_dwi runs without the full AMICO stack.
+    """Patch AMICO internals so Noddi.estimate_noddi runs without the full AMICO stack.
 
-    The @cacheable wrapper on estimate_from_dwi is left intact so that caching
+    The @cacheable wrapper on estimate_noddi is left intact so that caching
     behaviour can be tested end-to-end.
     """
     mock_ae = MagicMock()
@@ -326,9 +326,9 @@ def test_estimate_noddi_with_caching(dwi3: Dwi, mocker, tmp_path: Path) -> None:
     assert np.allclose(noddi.volume.get_array(), mock_ae.RESULTS["MAPs"])
     assert np.allclose(noddi.directions.get_array(), mock_ae.RESULTS["DIRs"])
     assert np.allclose(noddi.volume.get_affine(), dwi3.volume.get_affine())
-    assert (tmp_path / "noddi.nii.gz").exists()
-    assert (tmp_path / "noddi_directions.nii.gz").exists()
-    assert pc.status([Noddi.estimate_from_dwi])["Noddi.estimate_from_dwi"] is True
+    assert (tmp_path / "estimate_noddi.nii.gz").exists()
+    assert (tmp_path / "estimate_noddi_directions.nii.gz").exists()
+    assert pc.status([Noddi.estimate_noddi])["Noddi.estimate_noddi"] is True
 
     # Second call loads from cache — AMICO fit is not re-invoked
     mock_ae.fit.reset_mock()

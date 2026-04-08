@@ -44,17 +44,19 @@ class Noddi:
 
     @classmethod
     def _cache_files(cls, step_name: str) -> list[str]:
-        return ["noddi.nii.gz", "noddi_directions.nii.gz"]
+        return [f"{step_name}.nii.gz", f"{step_name}_directions.nii.gz"]
 
     def _cache_save(self, cache_dir: Path, step_name: str) -> None:
-        NiftiVolumeResource.save(self.volume, cache_dir / "noddi.nii.gz")
-        NiftiVolumeResource.save(self.directions, cache_dir / "noddi_directions.nii.gz")
+        NiftiVolumeResource.save(self.volume, cache_dir / f"{step_name}.nii.gz")
+        NiftiVolumeResource.save(
+            self.directions, cache_dir / f"{step_name}_directions.nii.gz"
+        )
 
     @classmethod
     def _cache_load(cls, cache_dir: Path, step_name: str) -> Noddi:
         return cls(
-            NiftiVolumeResource(cache_dir / "noddi.nii.gz"),
-            NiftiVolumeResource(cache_dir / "noddi_directions.nii.gz"),
+            NiftiVolumeResource(cache_dir / f"{step_name}.nii.gz"),
+            NiftiVolumeResource(cache_dir / f"{step_name}_directions.nii.gz"),
         )
 
     def save(self, path: PathLike) -> Noddi:
@@ -78,7 +80,7 @@ class Noddi:
 
     @staticmethod
     @cacheable
-    def estimate_from_dwi(
+    def estimate_noddi(
         dwi: Dwi,
         mask: VolumeResource | None = None,
         dpar: float = 1.7e-3,
