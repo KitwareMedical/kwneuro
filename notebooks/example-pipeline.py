@@ -352,13 +352,19 @@ print(f"Results saved to {output_dir.resolve()}")
 # %% [markdown]
 # ## Pipeline caching
 #
-# Wrapping pipeline steps in a `Cache` context saves results to disk
-# on the first run and reloads them automatically on subsequent runs, skipping
-# the underlying computation. Scalar parameters (`int`, `float`, `str`, `bool`)
-# are fingerprinted automatically — changing them invalidates only that step's
-# cache. Use a separate `cache_dir` per subject so cached results stay isolated.
-# Pass `force={"step_name"}` (or `force=True`) to recompute a specific step or
-# all steps.
+# Wrapping pipeline steps in a `Cache` context manager enables automatic
+# disk-based caching. Key behaviours:
+#
+# - **First run:** results are computed and saved to `cache_dir`.
+# - **Subsequent runs:** results are loaded from disk, skipping the computation.
+# - **Scalar parameters** (`int`, `float`, `str`, `bool`) are stored as
+#   human-readable JSON and fingerprinted — changing a value invalidates that
+#   step's cache.
+# - **Input data** (volumes, b-values, b-vectors, masks, response functions) are
+#   sha256-fingerprinted — if the underlying data changes, the cache is
+#   invalidated automatically.
+# - **Forced recomputation:** pass `force={"step_name"}` or `force=True` to
+#   rerun a specific step or all steps regardless of cache state.
 
 # %%
 from kwneuro.cache import Cache
@@ -368,11 +374,32 @@ from kwneuro.noddi import Noddi
 cache_dir = Path("cache")
 
 with Cache(cache_dir) as pc:
-    dti_cached = dwi_denoised.estimate_dti(mask=mask)
-    noddi_cached = dwi_denoised.estimate_noddi(mask=mask)
-    _, peaks_cached = compute_csd_peaks(dwi_denoised, mask, response)
+    dti = dwi_denoised.estimate_dti(mask=mask)
+    noddi = dwi_denoised.estimate_noddi(mask=mask)
+    _, peaks = compute_csd_peaks(dwi_denoised, mask, response)
 
 status = pc.status([Dti.estimate_dti, Noddi.estimate_noddi, compute_csd_peaks])
 print("Cache status:")
 for step, is_cached in status.items():
     print(f"  {step}: {'cached' if is_cached else 'not cached'}")
+
+# %% [markdown]
+# Quick look at the `.params.json` file saved alongside each cached step.
+# The sidecar has two sections:
+#
+# - `scalars` — scalar parameters stored as human-readable JSON, so you can
+#   inspect exactly what values were used to produce the cached result.
+# - `hashes` — sha256 fingerprints of non-scalar inputs (DWI volume,
+#   b-values, b-vectors, mask, response function, etc.). If the underlying data
+#   changes between runs, the hash changes and the cache is invalidated.
+
+# %%
+import json
+
+print("Files in cache_dir:")
+for f in sorted(cache_dir.iterdir()):
+    print(f"  {f.name}")
+
+print("\nestimate_dti.params.json:")
+sidecar = json.loads((cache_dir / "estimate_dti.params.json").read_text())
+print(json.dumps(sidecar, indent=2))
