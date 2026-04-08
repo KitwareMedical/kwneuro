@@ -410,7 +410,7 @@ def test_estimate_noddi(dwi3: Dwi, mocker, tmp_path: Path, random_affine: np.nda
 
     mock_estimate_noddi = mocker.patch.object(
         Noddi,
-        "estimate_from_dwi",
+        "estimate_noddi",
         return_value=mock_noddi,
     )
 

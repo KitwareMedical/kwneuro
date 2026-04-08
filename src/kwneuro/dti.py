@@ -37,15 +37,14 @@ class Dti:
 
     @classmethod
     def _cache_files(cls, step_name: str) -> list[str]:
-        # Fixed name avoids collision with Noddi (same step_name "estimate_from_dwi").
-        return ["dti.nii.gz"]
+        return [f"{step_name}.nii.gz"]
 
     def _cache_save(self, cache_dir: Path, step_name: str) -> None:
-        self.save(cache_dir / "dti.nii.gz")
+        self.save(cache_dir / f"{step_name}.nii.gz")
 
     @classmethod
     def _cache_load(cls, cache_dir: Path, step_name: str) -> Dti:
-        return cls(NiftiVolumeResource(cache_dir / "dti.nii.gz"))
+        return cls(NiftiVolumeResource(cache_dir / f"{step_name}.nii.gz"))
 
     def save(self, path: PathLike) -> Dti:
         """Save all resources to disk and return a Dti with all resources being on-disk.
@@ -61,7 +60,7 @@ class Dti:
 
     @staticmethod
     @cacheable
-    def estimate_from_dwi(dwi: Dwi, mask: VolumeResource | None = None) -> Dti:
+    def estimate_dti(dwi: Dwi, mask: VolumeResource | None = None) -> Dti:
         """Estimate a DTI from a DWI.
 
         Args:
