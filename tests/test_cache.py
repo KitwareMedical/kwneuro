@@ -13,6 +13,7 @@ from kwneuro.cache import (
     Cache,
     CacheSpec,
     _active_cache,
+    _compute_fingerprint,
     cacheable,
 )
 from kwneuro.csd import compute_csd_peaks
@@ -536,3 +537,134 @@ def test_untracked_param_warns(tmp_path: Path) -> None:
 
     with pytest.warns(UserWarning, match="cannot be fingerprinted"), Cache(tmp_path):
         fn(Opaque())
+
+
+# ---------------------------------------------------------------------------
+# Unit tests for _compute_fingerprint
+# ---------------------------------------------------------------------------
+
+
+def test_fingerprint_stability(random_affine: np.ndarray) -> None:
+    """Same VolumeResource produces the same fingerprint on repeated calls."""
+    vol = InMemoryVolumeResource(
+        array=np.ones((3, 4, 5), dtype=np.float32),
+        affine=random_affine,
+    )
+    fp1 = _compute_fingerprint(vol)
+    fp2 = _compute_fingerprint(vol)
+    assert fp1 is not None
+    assert len(fp1) == 64  # sha256 hex digest
+    assert fp1 == fp2
+
+
+def test_fingerprint_volume_resource_array_change(random_affine: np.ndarray) -> None:
+    """Changing the array field of a VolumeResource changes its fingerprint."""
+    vol_a = InMemoryVolumeResource(
+        array=np.ones((3, 4, 5), dtype=np.float32),
+        affine=random_affine,
+    )
+    vol_b = InMemoryVolumeResource(
+        array=np.zeros((3, 4, 5), dtype=np.float32),
+        affine=random_affine,
+    )
+    assert _compute_fingerprint(vol_a) != _compute_fingerprint(vol_b)
+
+
+def test_fingerprint_volume_resource_affine_change() -> None:
+    """Changing the affine of a VolumeResource changes its fingerprint."""
+    arr = np.ones((3, 4, 5), dtype=np.float32)
+    vol_a = InMemoryVolumeResource(array=arr, affine=np.eye(4))
+    vol_b = InMemoryVolumeResource(array=arr, affine=2 * np.eye(4))
+    assert _compute_fingerprint(vol_a) != _compute_fingerprint(vol_b)
+
+
+def test_fingerprint_ndarray_shape_matters() -> None:
+    """Arrays with the same bytes but different shapes produce different fingerprints."""
+    flat = np.arange(6, dtype=np.float32)
+    reshaped = flat.reshape(2, 3).copy()
+    assert _compute_fingerprint(flat) != _compute_fingerprint(reshaped)
+
+
+def test_fingerprint_ndarray_dtype_matters() -> None:
+    """Arrays with the same values but different dtypes produce different fingerprints."""
+    a_int = np.array([1, 2, 3], dtype=np.int32)
+    a_float = np.array([1, 2, 3], dtype=np.float32)
+    assert _compute_fingerprint(a_int) != _compute_fingerprint(a_float)
+
+
+def test_fingerprint_nested_dataclass(
+    random_affine: np.ndarray, small_nifti_header: nib.Nifti1Header
+) -> None:
+    """Changing a nested field (bvec) inside a Dwi propagates to a different Dwi fingerprint."""
+    n_vols = 4
+    rng = np.random.default_rng(999)
+    bvecs = rng.random(size=(n_vols, 3), dtype=np.float32)
+    bvecs = bvecs / np.sqrt((bvecs**2).sum(axis=1, keepdims=True))
+    dwi_a = Dwi(
+        volume=InMemoryVolumeResource(
+            array=rng.random(size=(3, 4, 5, n_vols), dtype=np.float32),
+            affine=random_affine,
+            metadata=dict(small_nifti_header),
+        ),
+        bval=InMemoryBvalResource(array=np.array([0, 1000, 2000, 0], dtype=float)),
+        bvec=InMemoryBvecResource(array=bvecs),
+    )
+    # Same everything except bvec
+    different_bvecs = rng.random(size=(n_vols, 3), dtype=np.float32)
+    different_bvecs = different_bvecs / np.sqrt(
+        (different_bvecs**2).sum(axis=1, keepdims=True)
+    )
+    dwi_b = Dwi(
+        volume=dwi_a.volume,
+        bval=dwi_a.bval,
+        bvec=InMemoryBvecResource(array=different_bvecs),
+    )
+    assert _compute_fingerprint(dwi_a) != _compute_fingerprint(dwi_b)
+
+
+def test_fingerprint_path() -> None:
+    """Different Paths produce different fingerprints; same Path is stable."""
+    fp_a = _compute_fingerprint(Path("/a/b"))
+    fp_b = _compute_fingerprint(Path("/a/c"))
+    assert fp_a is not None
+    assert fp_a != fp_b
+    assert fp_a == _compute_fingerprint(Path("/a/b"))
+
+
+def test_fingerprint_unrecognized_type_returns_none() -> None:
+    """An unrecognized type returns None (caller should warn)."""
+    assert _compute_fingerprint(object()) is None
+
+
+# ---------------------------------------------------------------------------
+# Integration: cache invalidation via VolumeResource parameter changes
+# ---------------------------------------------------------------------------
+
+
+def test_cacheable_mask_change_triggers_recompute(
+    dwi3: Dwi, tmp_path: Path, mocker
+) -> None:
+    """Changing a VolumeResource mask parameter invalidates the cache."""
+    mask_a = InMemoryVolumeResource(
+        array=np.ones((3, 4, 5), dtype=np.float32),
+        affine=dwi3.volume.get_affine(),
+    )
+    pc = Cache(tmp_path)
+    with pc:
+        dwi3.estimate_dti(mask=mask_a)
+
+    save_spy = mocker.spy(Dti, "_cache_save")
+
+    # Same mask → cache hit, no recompute
+    with pc:
+        dwi3.estimate_dti(mask=mask_a)
+    save_spy.assert_not_called()
+
+    # Different mask → cache miss, recompute
+    mask_b = InMemoryVolumeResource(
+        array=np.zeros((3, 4, 5), dtype=np.float32),
+        affine=dwi3.volume.get_affine(),
+    )
+    with pc:
+        dwi3.estimate_dti(mask=mask_b)
+    save_spy.assert_called_once()
