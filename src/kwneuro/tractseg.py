@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from kwneuro.cache import _active_cache
+from kwneuro.cache import _active_cache, _compute_fingerprint, _save_params
 from kwneuro.csd import combine_csd_peaks_to_vector_volume, compute_csd_peaks
 from kwneuro.io import NiftiVolumeResource
 from kwneuro.resource import ResponseFunctionResource, VolumeResource
@@ -59,9 +59,24 @@ def extract_tractseg(
     # Inline cache check — uses a dynamic filename so a decorator cannot be used.
     _cache = _active_cache.get()
     _cache_file = f"tractseg_{output_type}.nii.gz"
-    if _cache is not None and _cache.is_cached("extract_tractseg", [_cache_file]):
-        logging.info("extract_tractseg: cache hit (%s)", output_type)
-        return NiftiVolumeResource(_cache.cache_dir / _cache_file)
+    _scalars: dict[str, Any] | None = None
+    _hashes: dict[str, str] | None = None
+    if _cache is not None:
+        _scalars = {"output_type": output_type}
+        h: dict[str, str] = {}
+        for name, val in [
+            ("dwi", dwi),
+            ("mask", mask),
+            ("response", response),
+            ("csd_peaks", csd_peaks),
+        ]:
+            fp = _compute_fingerprint(val)
+            if fp is not None:
+                h[name] = fp
+        _hashes = h or None
+        if _cache.is_cached("extract_tractseg", [_cache_file], _scalars, _hashes):
+            logging.info("extract_tractseg: cache hit (%s)", output_type)
+            return NiftiVolumeResource(_cache.cache_dir / _cache_file)
 
     if csd_peaks is None:
         # Compute CSD peaks (MRtrix3 convention: 3 peaks).
@@ -90,6 +105,7 @@ def extract_tractseg(
 
     if _cache is not None:
         logging.info("extract_tractseg: saving cache (%s)", output_type)
+        _save_params(_cache.cache_dir, "extract_tractseg", _scalars, _hashes)
         return NiftiVolumeResource.save(result, _cache.cache_dir / _cache_file)
 
     return result
