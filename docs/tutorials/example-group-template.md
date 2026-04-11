@@ -1,49 +1,26 @@
-# ---
-# jupyter:
-#   jupytext:
-#     formats: ipynb,py:percent
-#     text_representation:
-#       extension: .py
-#       format_name: percent
-#       format_version: '1.3'
-#       jupytext_version: 1.19.1
-#   kernelspec:
-#     display_name: Python 3 (ipykernel)
-#     language: python
-#     name: python3
-# ---
+# Population Template Construction
 
-# %% [markdown]
-# # Population Template Construction
-#
-# This notebook demonstrates how to build population-level templates from
-# individual subject volumes using the `kwneuro` registration tools.
+This notebook demonstrates how to build population-level templates from
+individual subject volumes using the `kwneuro` registration tools.
 
-# %% [markdown] tags=["remove-cell"]
-# ### Spatial subsampling
-#
-# Configure the following to spatially subsample the data and run through the demo more quickly at lower spatial resolution.
+## Download example data
 
-# %% tags=["remove-cell"]
-SUBSAMPLE = False
-SUBSAMPLE_FACTOR = 2
+We download 3 subjects from the MPI-Leipzig Mind-Brain-Body dataset
+([OpenNeuro ds000221](https://openneuro.org/datasets/ds000221)). This dataset
+contains 64-direction single-shell DWI data (b ~ 1000 s/mm²), which is
+sufficient for DTI-based template construction.
 
-# %% [markdown]
-# ## Download example data
-#
-# We download 3 subjects from the MPI-Leipzig Mind-Brain-Body dataset
-# ([OpenNeuro ds000221](https://openneuro.org/datasets/ds000221)). This dataset
-# contains 64-direction single-shell DWI data (b ~ 1000 s/mm²), which is
-# sufficient for DTI-based template construction.
-#
-# Total download size: ~250 MB for 3 subjects.
+Total download size: ~250 MB for 3 subjects.
 
-# %%
+
+```python
 from pathlib import Path
 
 import openneuro as on
+```
 
-# %% tags=["remove-output"]
+
+```python
 DATA_DIR = Path("example_data/ds000221")
 SUBJECTS = ["sub-010002", "sub-010005", "sub-010006"]
 
@@ -62,15 +39,16 @@ if not DATA_DIR.exists() or not any(DATA_DIR.iterdir()):
     print("Download complete!")
 else:
     print(f"Using existing data at {DATA_DIR.resolve()}")
+```
 
-# %% [markdown]
-# ## Load DWI data and compute per-subject FA / MD
-#
-# We construct `Dwi` objects from each subject's DWI files, fit a diffusion
-# tensor, and extract FA and MD maps. These scalar maps are then used for
-# template construction.
+## Load DWI data and compute per-subject FA / MD
 
-# %% tags=["remove-output"]
+We construct `Dwi` objects from each subject's DWI files, fit a diffusion
+tensor, and extract FA and MD maps. These scalar maps are then used for
+template construction.
+
+
+```python
 import matplotlib.pyplot as plt
 import numpy as np
 import tempfile
@@ -116,22 +94,12 @@ for dwi, mask in zip(dwis, masks):
     fa_vol, md_vol = dti.get_fa_md()
     fa_volumes.append(fa_vol)
     md_volumes.append(md_vol)
+```
 
-# %% tags=["remove-cell"]
-# (This cell fixes a few notebook output issues caused by the HD-BET masking step above)
+Preview a slice of the individual FA and MD maps.
 
-# %matplotlib inline
 
-import sys
-from IPython import get_ipython
-
-kernel = get_ipython().kernel
-sys.stdout = kernel._stdout
-
-# %% [markdown]
-# Preview a slice of the individual FA and MD maps.
-
-# %%
+```python
 print(f"Computed FA/MD for {len(fa_volumes)} subjects")
 
 n_show = min(len(fa_volumes), 4)
@@ -161,35 +129,56 @@ for i, ax in enumerate(axes):
 plt.suptitle("Individual MD maps")
 plt.tight_layout()
 plt.show()
+```
 
-# %% [markdown]
-# ## Single-metric population template
-#
-# `build_template` constructs an unbiased group-wise mean template via
-# iterative ANTs SyN registration. Each iteration:
-#
-# 1. Registers every subject to the current template
-# 2. Averages the warped images
-# 3. Corrects for mean shape bias using the inverse average transform
-# 4. Sharpens the result
-#
-# The initial template is the simple voxel-wise average (no registration).
+    Computed FA/MD for 3 subjects
 
-# %%
+
+
+    
+![png](example-group-template_files/example-group-template_7_1.png)
+    
+
+
+
+    
+![png](example-group-template_files/example-group-template_7_2.png)
+    
+
+
+## Single-metric population template
+
+`build_template` constructs an unbiased group-wise mean template via
+iterative ANTs SyN registration. Each iteration:
+
+1. Registers every subject to the current template
+2. Averages the warped images
+3. Corrects for mean shape bias using the inverse average transform
+4. Sharpens the result
+
+The initial template is the simple voxel-wise average (no registration).
+
+
+```python
 from kwneuro.build_template import average_volumes, build_template
 
 initial_avg = average_volumes(fa_volumes)
+```
 
-# %% tags=["remove-output"]
+
+```python
 fa_template_1it = build_template(fa_volumes, initial_template=initial_avg, iterations=1)
+```
 
-# %% tags=["remove-output"]
+
+```python
 fa_template_4it = build_template(fa_volumes, initial_template=fa_template_1it, iterations=3)
+```
 
-# %% [markdown]
-# Compare the naive average with the registration-based template.
+Compare the naive average with the registration-based template.
 
-# %%
+
+```python
 avg_arr = initial_avg.get_array()
 tmpl_arr_1it = fa_template_1it.get_array()
 tmpl_arr_4it = fa_template_4it.get_array()
@@ -206,42 +195,54 @@ for ax in axes:
     ax.axis("off")
 plt.tight_layout()
 plt.show()
+```
 
-# %% [markdown]
-# ## Multi-metric population template
-#
-# `build_multi_metric_template` uses multiple modalities simultaneously to
-# drive the registration. The first modality is used for the affine step;
-# all modalities contribute to the deformable (SyN) step.
-#
-# Each subject is passed as a dictionary mapping modality names to volumes.
 
-# %%
+    
+![png](example-group-template_files/example-group-template_13_0.png)
+    
+
+
+## Multi-metric population template
+
+`build_multi_metric_template` uses multiple modalities simultaneously to
+drive the registration. The first modality is used for the affine step;
+all modalities contribute to the deformable (SyN) step.
+
+Each subject is passed as a dictionary mapping modality names to volumes.
+
+
+```python
 from kwneuro.build_template import build_multi_metric_template
 
 subject_list = []
 for fa, md in zip(fa_volumes, md_volumes):
     subject_list.append({"FA": fa, "MD": md})
+```
 
-# %% tags=["remove-output"]
+
+```python
 multi_template_1it = build_multi_metric_template(
     subject_list,
     weights={"FA": 1.0, "MD": 1.0},
     iterations=1,
 )
+```
 
-# %% tags=["remove-output"]
+
+```python
 multi_template_4it = build_multi_metric_template(
     subject_list,
     weights={"FA": 1.0, "MD": 1.0},
     iterations=3,
     initial_template=multi_template_1it,
 )
+```
 
-# %% [markdown]
-# Visualise the multi-metric template for each modality.
+Visualise the multi-metric template for each modality.
 
-# %%
+
+```python
 fig, axes = plt.subplots(2, 2, figsize=(10, 8))
 
 fa_tmpl_1it = multi_template_1it["FA"].get_array()
@@ -271,11 +272,18 @@ for ax in axes.flatten():
 plt.suptitle("Multi-metric population templates")
 plt.tight_layout()
 plt.show()
+```
 
-# %% [markdown]
-# ## Save templates to disk
 
-# %% tags=["remove-output"]
+    
+![png](example-group-template_files/example-group-template_19_0.png)
+    
+
+
+## Save templates to disk
+
+
+```python
 output_dir = Path("output")
 output_dir.mkdir(exist_ok=True)
 
@@ -285,3 +293,4 @@ for name, vol in multi_template_4it.items():
     NiftiVolumeResource.save(vol, output_dir / f"{name.lower()}_template_multi.nii.gz")
 
 print(f"Templates saved to {output_dir.resolve()}")
+```

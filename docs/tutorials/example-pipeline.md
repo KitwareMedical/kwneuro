@@ -1,43 +1,18 @@
-# ---
-# jupyter:
-#   jupytext:
-#     formats: ipynb,py:percent
-#     text_representation:
-#       extension: .py
-#       format_name: percent
-#       format_version: '1.3'
-#       jupytext_version: 1.19.1
-#   kernelspec:
-#     display_name: Python 3 (ipykernel)
-#     language: python
-#     name: python3
-# ---
+# Single-Subject Microstructure Pipeline
 
-# %% [markdown]
-# # Single-Subject Microstructure Pipeline
-#
-# This notebook demonstrates the main capabilities of the `kwneuro` package
-# for extracting brain microstructure parameters from diffusion MRI data.
+This notebook demonstrates the main capabilities of the `kwneuro` package
+for extracting brain microstructure parameters from diffusion MRI data.
 
-# %% [markdown] tags=["remove-cell"]
-# ### Spatial subsampling
-#
-# Configure the following to spatially subsample the data and run through the demo more quickly at lower spatial resolution.
+## Download example data
 
-# %% tags=["remove-cell"]
-SUBSAMPLE = False
-SUBSAMPLE_FACTOR = 2
+We use the Sherbrooke 3-shell HARDI dataset from DIPY, which provides
+multi-shell diffusion data (b = 0, 1000, 2000, 3500 s/mm²) with 193 gradient
+directions. Multi-shell data is required for NODDI estimation.
 
-# %% [markdown]
-# ## Download example data
-#
-# We use the Sherbrooke 3-shell HARDI dataset from DIPY, which provides
-# multi-shell diffusion data (b = 0, 1000, 2000, 3500 s/mm²) with 193 gradient
-# directions. Multi-shell data is required for NODDI estimation.
-#
-# The data is downloaded automatically on first run (~50 MB).
+The data is downloaded automatically on first run (~50 MB).
 
-# %% tags=["remove-output"]
+
+```python
 from dipy.data import fetch_sherbrooke_3shell
 
 # Download the dataset if not already present
@@ -46,15 +21,16 @@ basename = "HARDI193"
 
 print(f"Data directory: {data_dir}")
 print(f"Files: {list(files.keys())}")
+```
 
-# %% [markdown]
-# ## Load DWI data
-#
-# A `Dwi` object bundles three resources: the 4D volume, b-values, and
-# b-vectors. Resources are loaded lazily — nothing is read from disk until
-# you call `.load()`.
+## Load DWI data
 
-# %%
+A `Dwi` object bundles three resources: the 4D volume, b-values, and
+b-vectors. Resources are loaded lazily — nothing is read from disk until
+you call `.load()`.
+
+
+```python
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -81,18 +57,25 @@ vol = dwi.volume.get_array()
 bvals = dwi.bval.get()
 print(f"Volume shape: {vol.shape}")
 print(f"Unique b-values: {np.unique(np.round(bvals, -2))}")
+```
 
-# %% [markdown]
-# Quick look at the mean b=0 image and a diffusion-weighted image side by side.
-# `compute_mean_b0()` averages all b=0 volumes, which is also used internally
-# by brain extraction.
+    Volume shape: (128, 128, 60, 193)
+    Unique b-values: [   0. 1000. 2000. 3500.]
 
-# %%
+
+Quick look at the mean b=0 image and a diffusion-weighted image side by side.
+`compute_mean_b0()` averages all b=0 volumes, which is also used internally
+by brain extraction.
+
+
+```python
 mean_b0 = dwi.compute_mean_b0()
 mean_b0_arr = mean_b0.get_array()
 mid_slice = vol.shape[2] // 2
+```
 
-# %%
+
+```python
 dwi_large_bval_idx = np.argmax(bvals)
 fig, axes = plt.subplots(1, 2, figsize=(10, 4))
 axes[0].imshow(mean_b0_arr[:, :, mid_slice].T, cmap="gray", origin="lower")
@@ -103,18 +86,27 @@ for ax in axes:
     ax.axis("off")
 plt.tight_layout()
 plt.show()
+```
 
-# %% [markdown]
-# ## Denoising
-#
-# `Dwi.denoise()` applies DIPY's Patch2Self algorithm. It returns a new `Dwi`
-# with the denoised volume (b-values and b-vectors are carried forward
-# unchanged).
 
-# %% tags=["remove-output"]
+    
+![png](example-pipeline_files/example-pipeline_7_0.png)
+    
+
+
+## Denoising
+
+`Dwi.denoise()` applies DIPY's Patch2Self algorithm. It returns a new `Dwi`
+with the denoised volume (b-values and b-vectors are carried forward
+unchanged).
+
+
+```python
 dwi_denoised = dwi.denoise()
+```
 
-# %%
+
+```python
 orig = vol[:, :, mid_slice, dwi_large_bval_idx]
 denoised_large_bval = dwi_denoised.volume.get_array()[:, :, mid_slice, dwi_large_bval_idx]
 
@@ -130,28 +122,26 @@ for ax in axes:
     ax.axis("off")
 plt.tight_layout()
 plt.show()
+```
 
-# %% [markdown]
-# ## Brain extraction
-#
-# `extract_brain()` uses HD-BET to produce a binary brain mask from the mean
-# b=0 image. The mask is returned as a `VolumeResource`.
 
-# %% tags=["remove-output"]
+    
+![png](example-pipeline_files/example-pipeline_10_0.png)
+    
+
+
+## Brain extraction
+
+`extract_brain()` uses HD-BET to produce a binary brain mask from the mean
+b=0 image. The mask is returned as a `VolumeResource`.
+
+
+```python
 mask = dwi_denoised.extract_brain()
+```
 
-# %% tags=["remove-cell"]
-# (This cell fixes a few notebook output issues caused by the HD-BET masking step above)
 
-# %matplotlib inline
-
-import sys
-from IPython import get_ipython
-
-kernel = get_ipython().kernel
-sys.stdout = kernel._stdout
-
-# %%
+```python
 mask_arr = mask.get_array()
 denoised = dwi_denoised.compute_mean_b0().get_array()[:, :, mid_slice]
 print(f"Mask shape: {mask_arr.shape}, voxels in brain: {mask_arr.sum()}")
@@ -163,22 +153,34 @@ ax.set_title("Brain mask overlay")
 ax.axis("off")
 plt.tight_layout()
 plt.show()
+```
 
-# %% [markdown]
-# ## DTI estimation
-#
-# `estimate_dti()` fits a diffusion tensor at each voxel using DIPY's
-# TensorModel. The resulting `Dti` object gives access to:
-#
-# - **FA** (fractional anisotropy) — degree of diffusion directionality
-# - **MD** (mean diffusivity) — average diffusion rate
-# - **Eigenvalues / eigenvectors** — full tensor decomposition
+    Mask shape: (128, 128, 60), voxels in brain: 174687.0
 
-# %%
+
+
+    
+![png](example-pipeline_files/example-pipeline_13_1.png)
+    
+
+
+## DTI estimation
+
+`estimate_dti()` fits a diffusion tensor at each voxel using DIPY's
+TensorModel. The resulting `Dti` object gives access to:
+
+- **FA** (fractional anisotropy) — degree of diffusion directionality
+- **MD** (mean diffusivity) — average diffusion rate
+- **Eigenvalues / eigenvectors** — full tensor decomposition
+
+
+```python
 dti = dwi_denoised.estimate_dti(mask=mask)
 fa_vol, md_vol = dti.get_fa_md()
+```
 
-# %%
+
+```python
 fa = fa_vol.get_array()
 md = md_vol.get_array()
 
@@ -195,17 +197,26 @@ for ax in axes:
     ax.axis("off")
 plt.tight_layout()
 plt.show()
+```
 
-# %% [markdown]
-# ### Eigenvalue decomposition
-#
-# The eigenvalues ($\lambda_1 \ge \lambda_2 \ge \lambda_3$) reveal the shape
-# of diffusion at each voxel.
 
-# %%
+    
+![png](example-pipeline_files/example-pipeline_16_0.png)
+    
+
+
+### Eigenvalue decomposition
+
+The eigenvalues ($\lambda_1 \ge \lambda_2 \ge \lambda_3$) reveal the shape
+of diffusion at each voxel.
+
+
+```python
 evals_vol, evecs_vol = dti.get_eig()
+```
 
-# %%
+
+```python
 evals = evals_vol.get_array()  # shape (x, y, z, 3)
 
 fig, axes = plt.subplots(1, 3, figsize=(14, 4))
@@ -220,21 +231,30 @@ for i, (ax, label) in enumerate(
     plt.colorbar(im, ax=ax, fraction=0.046)
 plt.tight_layout()
 plt.show()
+```
 
-# %% [markdown]
-# ## NODDI estimation
-#
-# `estimate_noddi()` fits a NODDI model at each voxel using AMICO. The resulting `Noddi` object
-# gives access to the following biophysically meaningful parameters:
-#
-# - **NDI** — neurite density index
-# - **ODI** — orientation dispersion index
-# - **FWF** — free water fraction
 
-# %% tags=["remove-output"]
+    
+![png](example-pipeline_files/example-pipeline_19_0.png)
+    
+
+
+## NODDI estimation
+
+`estimate_noddi()` fits a NODDI model at each voxel using AMICO. The resulting `Noddi` object
+gives access to the following biophysically meaningful parameters:
+
+- **NDI** — neurite density index
+- **ODI** — orientation dispersion index
+- **FWF** — free water fraction
+
+
+```python
 noddi = dwi_denoised.estimate_noddi(mask=mask) # array shape (x, y, z, 3)
+```
 
-# %%
+
+```python
 fig, axes = plt.subplots(1, 3, figsize=(14, 4))
 for ax, arr, title, cmap in [
     (axes[0], noddi.ndi.get_array()[:, :, mid_slice], "NDI (neurite density)", "YlOrRd"),
@@ -247,20 +267,29 @@ for ax, arr, title, cmap in [
     plt.colorbar(im, ax=ax, fraction=0.046)
 plt.tight_layout()
 plt.show()
+```
 
-# %% [markdown]
-# ## CSD and fiber orientation distributions
-#
-# Constrained Spherical Deconvolution estimates fiber orientation distributions
-# (FODs) at each voxel. This is the basis for tractography and TractSeg.
 
-# %%
+    
+![png](example-pipeline_files/example-pipeline_22_0.png)
+    
+
+
+## CSD and fiber orientation distributions
+
+Constrained Spherical Deconvolution estimates fiber orientation distributions
+(FODs) at each voxel. This is the basis for tractography and TractSeg.
+
+
+```python
 from kwneuro.csd import compute_csd_peaks, estimate_response_function
 
 response = estimate_response_function(dwi_denoised, mask)
 peak_dirs, peak_values = compute_csd_peaks(dwi_denoised, mask, response)
+```
 
-# %%
+
+```python
 peak_dirs_arr = peak_dirs.get_array()  # (x, y, z, n_peaks, 3)
 peak_vals_arr = peak_values.get_array()  # (x, y, z, n_peaks)
 print(f"Peak directions shape: {peak_dirs_arr.shape}")
@@ -276,23 +305,32 @@ ax.axis("off")
 plt.colorbar(im, ax=ax, fraction=0.046)
 plt.tight_layout()
 plt.show()
+```
 
-# %% [markdown]
-# ## TractSeg — white matter tract segmentation
-#
-# TractSeg segments 72 white matter bundles directly from CSD peaks. It can
-# also produce tract endpoint regions and tract orientation maps (TOMs).
+    Peak directions shape: (128, 128, 60, 5, 3)
+    Peak values shape: (128, 128, 60, 5)
 
-# %% tags=["remove-output"]
+
+
+    
+![png](example-pipeline_files/example-pipeline_25_1.png)
+    
+
+
+## TractSeg — white matter tract segmentation
+
+TractSeg segments 72 white matter bundles directly from CSD peaks. It can
+also produce tract endpoint regions and tract orientation maps (TOMs).
+
+
+```python
 from kwneuro.tractseg import extract_tractseg
 
 tracts = extract_tractseg(dwi_denoised, mask, response, output_type="tract_segmentation")
+```
 
-# %% tags=["remove-cell"]
-# The tractseg step above changes this; we need to change it back for notebook plotting:
-# %matplotlib inline
 
-# %%
+```python
 from tractseg.data.dataset_specific_utils import get_bundle_names
 all_names = get_bundle_names("All")[1:]  # skip BG
 
@@ -320,14 +358,24 @@ for ax, idx, name in zip(axes, bundle_indices, bundle_names):
 plt.suptitle("Selected tract segmentations")
 plt.tight_layout()
 plt.show()
+```
 
-# %% [markdown]
-# ## Saving results to disk
-#
-# All results can be saved to NIfTI files. `save()` returns a new object
-# backed by on-disk resources (functional style — originals are unchanged).
+    TractSeg output shape: (128, 128, 60, 72)
 
-# %% tags=["remove-output"]
+
+
+    
+![png](example-pipeline_files/example-pipeline_28_1.png)
+    
+
+
+## Saving results to disk
+
+All results can be saved to NIfTI files. `save()` returns a new object
+backed by on-disk resources (functional style — originals are unchanged).
+
+
+```python
 output_dir = Path("output")
 output_dir.mkdir(exist_ok=True)
 
@@ -348,3 +396,4 @@ NiftiVolumeResource.save(mask, output_dir / "brain_mask.nii.gz")
 dwi_denoised.save(output_dir, basename="denoised_dwi")
 
 print(f"Results saved to {output_dir.resolve()}")
+```

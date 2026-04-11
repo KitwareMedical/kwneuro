@@ -7,6 +7,20 @@ Usage:
     # Convert specific notebooks
     uv run --extra notebooks --extra combat python scripts/update-notebook-pages.py \
         notebooks/example-harmonization.py
+
+Note: Notebooks that download data from OpenNeuro (e.g. example-group-template)
+must have their data pre-downloaded before running this script. openneuro-py's
+download is non-blocking inside a Jupyter event loop, so the data won't be
+ready in time. Run the notebook's download cell interactively first, from the
+repo root (the script executes notebooks with CWD set to the repo root).
+
+Cell tags:
+    Notebooks can use Jupytext cell tags to control what appears in the
+    generated docs. The markdown export step strips tagged cells/outputs via
+    nbconvert's TagRemovePreprocessor:
+
+    - tags=["remove-output"]  Suppress cell output (progress bars, logs, etc.)
+    - tags=["remove-cell"]    Remove the entire cell (input + output)
 """
 
 from __future__ import annotations
@@ -63,21 +77,33 @@ def convert_notebook(py_path: Path) -> bool:
             return False
 
         # Step 2: Execute the notebook
+        # Run from the repo root so the kernel CWD is the repo root.
+        # nbconvert sets the kernel CWD to the notebook file's parent
+        # directory, so we temporarily copy the notebook to REPO_ROOT.
+        # This lets notebooks use stable relative paths (e.g. for
+        # downloading data that persists across runs).
         print("  [2/3] Executing notebook...")
-        result = subprocess.run(
-            [
-                "jupyter-nbconvert",
-                "--to",
-                "notebook",
-                "--execute",
-                "--inplace",
-                "--ExecutePreprocessor.timeout=600",
-                str(ipynb_path),
-            ],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
+        exec_ipynb = REPO_ROOT / ipynb_path.name
+        shutil.copy2(ipynb_path, exec_ipynb)
+        try:
+            result = subprocess.run(
+                [
+                    "jupyter-nbconvert",
+                    "--to",
+                    "notebook",
+                    "--execute",
+                    "--inplace",
+                    "--ExecutePreprocessor.timeout=600",
+                    str(exec_ipynb),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode == 0:
+                shutil.copy2(exec_ipynb, ipynb_path)
+        finally:
+            exec_ipynb.unlink(missing_ok=True)
         if result.returncode != 0:
             print(f"  FAILED (execute): {result.stderr}", file=sys.stderr)
             return False
@@ -89,6 +115,9 @@ def convert_notebook(py_path: Path) -> bool:
                 "jupyter-nbconvert",
                 "--to",
                 "markdown",
+                "--TagRemovePreprocessor.enabled=True",
+                "--TagRemovePreprocessor.remove_cell_tags=remove-cell",
+                "--TagRemovePreprocessor.remove_all_outputs_tags=remove-output",
                 "--output-dir",
                 str(tmpdir_path),
                 str(ipynb_path),
