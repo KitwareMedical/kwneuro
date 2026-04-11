@@ -8,5 +8,7 @@ running them interactively or regenerating these pages.
 ```{toctree}
 :maxdepth: 1
 
+example-pipeline
+example-group-template
 example-harmonization
 ```

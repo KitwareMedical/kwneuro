@@ -23,17 +23,9 @@
 #
 # This notebook demonstrates the `harmonize_volumes` function on synthetic
 # data with known site biases and a known age effect.
-#
-# ## Pipeline overview
-#
-# 1. Generate synthetic multi-site scalar maps with known biases
-# 2. Visualize site effects before harmonization
-# 3. Run ComBat harmonization
-# 4. Compare before and after
-# 5. Verify that the biological (age) effect is preserved
 
 # %% [markdown]
-# ## 1. Generate synthetic multi-site data
+# ## Generate synthetic multi-site data
 #
 # We create synthetic scalar volumes for 3 "sites" with 8 subjects each.
 # Each site has a different additive shift and multiplicative scale applied
@@ -91,7 +83,7 @@ print(f"Generated {len(volumes)} volumes across {len(sites)} sites")
 print(covars.groupby("site")["age"].describe()[["count", "mean", "std"]])
 
 # %% [markdown]
-# ## 2. Visualize site effects before harmonization
+# ## Visualize site effects before harmonization
 #
 # Each site's voxel-value distribution is shifted and scaled differently.
 
@@ -129,7 +121,7 @@ plt.tight_layout()
 plt.show()
 
 # %% [markdown]
-# ## 3. Run ComBat harmonization
+# ## Run ComBat harmonization
 
 # %%
 from kwneuro.harmonize import harmonize_volumes
@@ -145,7 +137,7 @@ harmonized, estimates = harmonize_volumes(
 print(f"Harmonized {len(harmonized)} volumes")
 
 # %% [markdown]
-# ## 4. Compare before and after
+# ## Compare before and after
 #
 # After harmonization, the per-site distributions should overlap.
 
@@ -195,7 +187,7 @@ for site in sites:
     )
 
 # %% [markdown]
-# ## 5. Verify covariate preservation
+# ## Verify covariate preservation
 #
 # The age effect should survive harmonization. We check the correlation
 # between age and mean voxel intensity before and after.

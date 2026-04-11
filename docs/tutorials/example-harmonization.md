@@ -1,27 +1,20 @@
 # Harmonization of Multi-Site Data
 
-When brain images are acquired at different sites or on different scanners, the
-resulting scalar measurements contain site-specific technical biases that can
-mask or mimic real biological effects. **ComBat** removes these additive and
-multiplicative site effects while preserving biological covariates like age and
-sex.
+When brain images are acquired at different sites or on different scanners,
+the resulting scalar measurements contain site-specific technical biases
+that can mask or mimic real biological effects. **ComBat**
+removes these additive and multiplicative site effects while preserving
+biological covariates like age and sex.
 
-This notebook demonstrates the `harmonize_volumes` function on synthetic data
-with known site biases and a known age effect.
+This notebook demonstrates the `harmonize_volumes` function on synthetic
+data with known site biases and a known age effect.
 
-## Pipeline overview
+## Generate synthetic multi-site data
 
-1. Generate synthetic multi-site scalar maps with known biases
-2. Visualize site effects before harmonization
-3. Run ComBat harmonization
-4. Compare before and after
-5. Verify that the biological (age) effect is preserved
+We create synthetic scalar volumes for 3 "sites" with 8 subjects each.
+Each site has a different additive shift and multiplicative scale applied
+on top of a shared biological signal (a smooth gradient + age effect).
 
-## 1. Generate synthetic multi-site data
-
-We create synthetic scalar volumes for 3 "sites" with 8 subjects each. Each site
-has a different additive shift and multiplicative scale applied on top of a
-shared biological signal (a smooth gradient + age effect).
 
 ```python
 import matplotlib.pyplot as plt
@@ -77,14 +70,16 @@ print(covars.groupby("site")["age"].describe()[["count", "mean", "std"]])
 
     Generated 24 volumes across 3 sites
                count       mean        std
-    site
+    site                                  
     Scanner_A    8.0  54.924903  15.648836
     Scanner_B    8.0  57.283493  12.979633
     Scanner_C    8.0  52.865805  12.695440
 
-## 2. Visualize site effects before harmonization
+
+## Visualize site effects before harmonization
 
 Each site's voxel-value distribution is shifted and scaled differently.
+
 
 ```python
 mask_idx = np.nonzero(mask_array > 0)
@@ -120,9 +115,14 @@ plt.tight_layout()
 plt.show()
 ```
 
-![png](example-harmonization_files/example-harmonization_4_0.png)
 
-## 3. Run ComBat harmonization
+    
+![png](example-harmonization_files/example-harmonization_4_0.png)
+    
+
+
+## Run ComBat harmonization
+
 
 ```python
 from kwneuro.harmonize import harmonize_volumes
@@ -145,9 +145,11 @@ print(f"Harmonized {len(harmonized)} volumes")
     [neuroCombat] Final adjustment of data
     Harmonized 24 volumes
 
-## 4. Compare before and after
+
+## Compare before and after
 
 After harmonization, the per-site distributions should overlap.
+
 
 ```python
 fig, axes = plt.subplots(1, 4, figsize=(14, 3), width_ratios=[3, 1, 1, 1])
@@ -195,17 +197,23 @@ for site in sites:
     )
 ```
 
+
+    
 ![png](example-harmonization_files/example-harmonization_8_0.png)
+    
+
 
     Per-site mean voxel values:
       Scanner_A     before: 0.3348  after: 0.3640
       Scanner_B     before: 0.6254  after: 0.3685
       Scanner_C     before: 0.1315  after: 0.3595
 
-## 5. Verify covariate preservation
 
-The age effect should survive harmonization. We check the correlation between
-age and mean voxel intensity before and after.
+## Verify covariate preservation
+
+The age effect should survive harmonization. We check the correlation
+between age and mean voxel intensity before and after.
+
 
 ```python
 means_before = [v.get_array()[mask_idx].mean() for v in volumes]
@@ -241,7 +249,12 @@ print(f"Age correlation before: {corr_before:.4f}")
 print(f"Age correlation after:  {corr_after:.4f}")
 ```
 
+
+    
 ![png](example-harmonization_files/example-harmonization_10_0.png)
+    
+
 
     Age correlation before: 0.2661
     Age correlation after:  0.9691
+
