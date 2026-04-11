@@ -43,7 +43,7 @@ repos:
       - id: prettier
         types_or: [yaml, markdown, html, css, scss, javascript, json]
         args: [--prose-wrap=always]
-        exclude: "^(.copier-answers.yml|docs/tutorials/)$"
+        exclude: "^(.copier-answers.yml$|docs/tutorials/)"
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: "v0.14.10"
@@ -69,7 +69,7 @@ repos:
     rev: "v2.4.1"
     hooks:
       - id: codespell
-        exclude: "^(uv\\.lock|docs/tutorials/)$"
+        exclude: "^(uv\\.lock$|docs/tutorials/)"
 
   - repo: https://github.com/shellcheck-py/shellcheck-py
     rev: "v0.11.0.1"
