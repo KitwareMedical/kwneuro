@@ -397,3 +397,88 @@ dwi_denoised.save(output_dir, basename="denoised_dwi")
 
 print(f"Results saved to {output_dir.resolve()}")
 ```
+
+## Pipeline caching
+
+Wrapping pipeline steps in a `Cache` context manager enables automatic
+disk-based caching. Key behaviours:
+
+- **First run:** results are computed and saved to `cache_dir`.
+- **Subsequent runs:** results are loaded from disk, skipping the computation.
+- **Scalar parameters** (`int`, `float`, `str`, `bool`) are stored as
+  human-readable JSON and fingerprinted — changing a value invalidates that
+  step's cache.
+- **Input data** (volumes, b-values, b-vectors, masks, response functions) are
+  sha256-fingerprinted — if the underlying data changes, the cache is
+  invalidated automatically.
+- **Forced recomputation:** pass `force={"step_name"}` or `force=True` to
+  rerun a specific step or all steps regardless of cache state.
+
+
+```python
+from kwneuro.cache import Cache
+from kwneuro.dti import Dti
+from kwneuro.noddi import Noddi
+
+cache_dir = Path("cache")
+
+with Cache(cache_dir) as pc:
+    dti = dwi_denoised.estimate_dti(mask=mask)
+    noddi = dwi_denoised.estimate_noddi(mask=mask)
+    _, peaks = compute_csd_peaks(dwi_denoised, mask, response)
+```
+
+
+```python
+status = pc.status([Dti.estimate_dti, Noddi.estimate_noddi, compute_csd_peaks])
+print("Cache status:")
+for step, is_cached in status.items():
+    print(f"  {step}: {'cached' if is_cached else 'not cached'}")
+```
+
+    Cache status:
+      Dti.estimate_dti: cached
+      Noddi.estimate_noddi: cached
+      compute_csd_peaks: cached
+
+
+Quick look at the `.params.json` file saved alongside each cached step.
+The sidecar has two sections:
+
+- `scalars` — scalar parameters stored as human-readable JSON, so you can
+  inspect exactly what values were used to produce the cached result.
+- `hashes` — sha256 fingerprints of non-scalar inputs (DWI volume,
+  b-values, b-vectors, mask, response function, etc.). If the underlying data
+  changes between runs, the hash changes and the cache is invalidated.
+
+
+```python
+import json
+
+print("Files in cache_dir:")
+for f in sorted(cache_dir.iterdir()):
+    print(f"  {f.name}")
+
+print("\nestimate_dti.params.json:")
+sidecar = json.loads((cache_dir / "estimate_dti.params.json").read_text())
+print(json.dumps(sidecar, indent=2))
+```
+
+    Files in cache_dir:
+      compute_csd_peaks.params.json
+      csd_peak_dirs.nii.gz
+      csd_peak_values.nii.gz
+      estimate_dti.nii.gz
+      estimate_dti.params.json
+      estimate_noddi.nii.gz
+      estimate_noddi.params.json
+      estimate_noddi_directions.nii.gz
+    
+    estimate_dti.params.json:
+    {
+      "hashes": {
+        "dwi": "a0b14d69557b8bdba79063cd935673b8c114ffaf1c3756b87c2c930d905abc6a",
+        "mask": "454054019b2fb1265fbeca5db8fb65b1701390a75d443c974e4f9896f8a71953"
+      }
+    }
+
