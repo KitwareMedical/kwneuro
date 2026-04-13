@@ -366,7 +366,7 @@ print(f"Results saved to {output_dir.resolve()}")
 # - **Forced recomputation:** pass `force={"step_name"}` or `force=True` to
 #   rerun a specific step or all steps regardless of cache state.
 
-# %%
+# %% tags=["remove-output"]
 from kwneuro.cache import Cache
 from kwneuro.dti import Dti
 from kwneuro.noddi import Noddi
@@ -378,6 +378,7 @@ with Cache(cache_dir) as pc:
     noddi = dwi_denoised.estimate_noddi(mask=mask)
     _, peaks = compute_csd_peaks(dwi_denoised, mask, response)
 
+# %%
 status = pc.status([Dti.estimate_dti, Noddi.estimate_noddi, compute_csd_peaks])
 print("Cache status:")
 for step, is_cached in status.items():
