@@ -142,7 +142,7 @@ Run the tests and linter:
 
 ```bash
 uv run pytest
-uv run ruff check .
+uv run pre-commit run -a
 ```
 
 See the
