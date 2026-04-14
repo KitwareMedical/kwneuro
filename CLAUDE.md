@@ -249,6 +249,113 @@ objects return new domain objects:
    - **Important**: This is a group-level operation (like build_template), not a
      per-subject stage
 
+### Pipeline Caching (`src/kwneuro/cache.py`)
+
+`Cache(cache_dir, force)` is a context manager that activates transparent disk
+caching for all `@cacheable`-decorated functions within its `with` block.
+Outside a `Cache` context, decorated functions run normally with zero overhead.
+
+#### Activating the cache
+
+```python
+with Cache(cache_dir="my_cache/sub-01", force=False) as cache:
+    dti = dwi.estimate_dti(mask)  # computed and saved on first run
+    dti = dwi.estimate_dti(mask)  # loaded from disk on second run
+```
+
+Each subject should use a distinct `cache_dir` to avoid collisions.
+`cache_dir` is created automatically if it does not exist.
+
+#### The `@cacheable` decorator — two forms
+
+**Bare `@cacheable`**: use when the return type implements the cache protocol
+(`_cache_files`, `_cache_save`, `_cache_load` class/static methods). All result
+classes (`Dti`, `Noddi`, etc.) implement this protocol.
+
+```python
+@cacheable
+def estimate_dti(dwi: Dwi, mask: VolumeResource | None = None) -> Dti:
+    ...
+```
+
+**`@cacheable(CacheSpec(...))`**: use when the return type is a tuple or other
+type that cannot carry the protocol.
+
+```python
+@cacheable(
+    CacheSpec(
+        files=["peaks_dirs.nii.gz", "peaks_values.nii.gz"],
+        save=lambda result, d: ...,
+        load=lambda d: ...,
+        step_name="compute_csd_peaks",  # optional; defaults to fn.__name__
+    )
+)
+def compute_csd_peaks() -> tuple[VolumeResource, VolumeResource]:
+    ...
+```
+
+`CacheSpec.step_name` overrides the default step name (the function's
+`__name__`). This is useful to avoid collisions when two functions would
+otherwise share a name.
+
+#### Return-type resolution is deferred
+
+For bare `@cacheable`, the return type annotation is resolved at the **first
+call**, not at decoration time. This allows `@cacheable` to be stacked directly
+on `@staticmethod` inside a class body, where the class name is not yet in the
+module namespace at decoration time.
+
+#### Cache miss always returns the disk-loaded result
+
+After a cache miss the function runs, the result is saved, and then
+`_cache_load()` is called before returning — not the in-memory result directly.
+This guarantees the caller always receives a disk-round-tripped object,
+ensuring consistency between hit and miss paths.
+
+#### Fingerprinting
+
+Each call's arguments are classified into two buckets stored in a sidecar file
+`{step_name}.params.json`:
+
+- **`"scalars"`** — `bool`, `int`, `float`, `str`, `None` values stored
+  verbatim as human-readable JSON. Note: `None` is treated as a scalar, not
+  fingerprinted.
+- **`"hashes"`** — everything else is content-fingerprinted with sha256.
+  Supported types: numpy arrays (bytes + shape + dtype), numpy scalars, `Path`,
+  `dict` (sorted by key), `list`/`tuple` (ordered), and **dataclass instances**
+  (recursively, field by field). This covers the full resource hierarchy (`Dwi`,
+  `VolumeResource`, etc.) without those classes needing to know about caching.
+
+A mismatch in either section triggers a cache miss. Arguments of unrecognised
+types cannot be tracked and trigger a `UserWarning`; use
+`force={"step_name"}` to force recomputation when such an argument changes.
+
+#### `force` parameter
+
+`force` accepts `bool` or `set[str]`:
+
+```python
+Cache(cache_dir=..., force=True)  # recompute everything
+Cache(cache_dir=..., force={"estimate_noddi"})  # recompute only this step
+```
+
+#### `cache.status()`
+
+```python
+cache.status([dwi.estimate_dti, dwi.estimate_noddi])
+# -> {"Dwi.estimate_dti": True, "Dwi.estimate_noddi": False}
+```
+
+Returns a `dict[str, bool]` mapping each step's `fn.__qualname__` to whether
+all its cached output files exist on disk. Non-decorated callables passed to
+`status()` are silently skipped.
+
+#### Thread / async safety
+
+`_active_cache` is a `contextvars.ContextVar`, so each thread or asyncio
+coroutine has its own independent cache context — nested or concurrent
+pipelines do not interfere with each other.
+
 ### CLI Integration
 
 The `gen_masks` command (`src/kwneuro/run.py`) demonstrates the batch processing
