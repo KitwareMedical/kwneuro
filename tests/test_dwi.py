@@ -3,16 +3,18 @@ from __future__ import annotations
 import logging
 import tempfile
 from pathlib import Path
-from unittest.mock import ANY
+from unittest.mock import ANY, MagicMock
 
 import nibabel as nib
 import numpy as np
 import pytest
 from scipy.linalg import expm
 
+from kwneuro import Cache
 from kwneuro.dwi import Dwi
 from kwneuro.io import NiftiVolumeResource
 from kwneuro.noddi import Noddi
+from kwneuro.reg import TransformResource
 from kwneuro.resource import (
     InMemoryBvalResource,
     InMemoryBvecResource,
@@ -458,3 +460,35 @@ def test_estimate_dti(dwi3: Dwi):
     dti = dwi3.estimate_dti()
     assert dwi3.volume.get_array().shape[3] == 6
     assert np.allclose(dti.volume.get_affine(), dwi3.volume.get_affine())
+
+
+def test_register_to_structural(
+    dwi3: Dwi, structural: StructuralImage, mocker, tmp_path: Path
+):
+    dwi_with_s = Dwi(
+        volume=dwi3.volume, bval=dwi3.bval, bvec=dwi3.bvec, structural=structural
+    )
+
+    # raises when no structural is set
+    with pytest.raises(ValueError, match="structural"):
+        dwi3.register_to_structural()
+
+    # calls register_volumes and returns the transform
+    stub_transform = TransformResource(_ants_fwd_paths=[], _ants_inv_paths=[])
+    mock_reg = mocker.patch(
+        "kwneuro.dwi.register_volumes", return_value=(MagicMock(), stub_transform)
+    )
+    result = dwi_with_s.register_to_structural(type_of_transform="Rigid")
+    mock_reg.assert_called_once()
+    assert isinstance(result, TransformResource)
+
+    # caching: second call with same Cache context is a hit (register_volumes not called again)
+    mock_reg.reset_mock()
+    with Cache(tmp_path):
+        dwi_with_s.register_to_structural()
+    assert mock_reg.call_count == 1
+
+    mock_reg.reset_mock()
+    with Cache(tmp_path):
+        dwi_with_s.register_to_structural()
+    mock_reg.assert_not_called()
