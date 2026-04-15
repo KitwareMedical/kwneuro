@@ -97,6 +97,24 @@ class TransformResource:
 
         return InMemoryVolumeResource.from_ants_image(warpedmovout)
 
+    @classmethod
+    def _cache_files(cls, step_name: str) -> list[str]:
+        return [f"{step_name}_transform.json"]
+
+    def _cache_save(self, cache_dir: Path, step_name: str) -> None:
+        import json
+
+        saved = self.save(cache_dir / f"{step_name}_transform")
+        index = {"fwd": saved._ants_fwd_paths, "inv": saved._ants_inv_paths}
+        (cache_dir / f"{step_name}_transform.json").write_text(json.dumps(index))
+
+    @classmethod
+    def _cache_load(cls, cache_dir: Path, step_name: str) -> TransformResource:
+        import json
+
+        index = json.loads((cache_dir / f"{step_name}_transform.json").read_text())
+        return cls(_ants_fwd_paths=index["fwd"], _ants_inv_paths=index["inv"])
+
     def save(self, output_dir: PathLike) -> TransformResource:
         """Copies the underlying ANTs transformation files to a permanent directory
         and returns a new TransformResource pointing to the saved locations"""
