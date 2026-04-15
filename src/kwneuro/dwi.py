@@ -15,6 +15,7 @@ from kwneuro.dti import Dti
 from kwneuro.io import FslBvalResource, FslBvecResource, NiftiVolumeResource
 from kwneuro.masks import brain_extract
 from kwneuro.noddi import Noddi
+from kwneuro.reg import TransformResource, register_volumes
 from kwneuro.resource import (
     BvalResource,
     BvecResource,
@@ -264,6 +265,34 @@ class Dwi:
         """Estimate NODDI model parameters from this DWI. See :meth:`kwneuro.noddi.Noddi.estimate_noddi` for details."""
         return Noddi.estimate_noddi(self, mask, dpar, n_kernel_dirs)  # type: ignore[no-any-return]
 
+    def register_to_structural(
+        self,
+        type_of_transform: str = "Rigid",
+        mask: VolumeResource | None = None,
+        structural_mask: VolumeResource | None = None,
+    ) -> TransformResource:
+        """Register this DWI (mean b0) to the associated structural (T1) image. This is a
+        convenience wrapper around :func:`kwneuro.reg.register_volumes`. Requires
+        ``self.structural`` to be set.
+
+        The returned :class:`~kwneuro.reg.TransformResource` maps DWI space → T1 space.
+        To warp T1-derived labels into DWI space, call
+        ``transform.apply(..., invert=True, interpolation="genericLabel")``.
+        See :meth:`kwneuro.reg.TransformResource.apply` for details.
+        """
+        if self.structural is None:
+            msg = "register_to_structural requires a structural image; set Dwi.structural first."
+            raise ValueError(msg)
+
+        _, transform = register_volumes(
+            fixed=self.structural.volume,
+            moving=self.compute_mean_b0(),
+            type_of_transform=type_of_transform,
+            mask=structural_mask,
+            moving_mask=mask,
+        )
+        return transform
+
 
 def subsample_dwi(dwi: Dwi, factor: int = 2) -> Dwi:
     """Spatially subsample a DWI by taking every Nth voxel along each spatial axis.
@@ -280,3 +309,4 @@ def subsample_dwi(dwi: Dwi, factor: int = 2) -> Dwi:
 
 Dwi.denoise = cacheable(Dwi.denoise)  # type: ignore[method-assign]
 Dwi.extract_brain = cacheable(Dwi.extract_brain)  # type: ignore[method-assign]
+Dwi.register_to_structural = cacheable(Dwi.register_to_structural)  # type: ignore[method-assign]
