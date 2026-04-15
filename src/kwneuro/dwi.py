@@ -4,6 +4,7 @@ import logging
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import dipy.core.gradients
 import numpy as np
@@ -12,7 +13,7 @@ from kwneuro.cache import cacheable
 from kwneuro.denoise import denoise_dwi
 from kwneuro.dti import Dti
 from kwneuro.io import FslBvalResource, FslBvecResource, NiftiVolumeResource
-from kwneuro.masks import brain_extract_single
+from kwneuro.masks import brain_extract
 from kwneuro.noddi import Noddi
 from kwneuro.resource import (
     BvalResource,
@@ -29,6 +30,9 @@ from kwneuro.util import (
     subsample_volume,
     update_volume_metadata,
 )
+
+if TYPE_CHECKING:
+    from kwneuro.structural import StructuralImage
 
 
 @dataclass
@@ -47,6 +51,9 @@ class Dwi:
     bvec: BvecResource
     """The DWI b-vectors"""
 
+    structural: StructuralImage | None = None
+    """An optional structural image (e.g. T1w) from the same imaging session."""
+
     def __post_init__(self) -> None:
         # Check that b-vectors are unit vectors whenever the b-value isn't 0
         bvecs_to_check = self.bvec.get()[self.bval.get() != 0]
@@ -60,6 +67,7 @@ class Dwi:
             volume=self.volume.load(),
             bval=self.bval.load(),
             bvec=self.bvec.load(),
+            structural=self.structural.load() if self.structural is not None else None,
         )
 
     # ------------------------------------------------------------------
@@ -232,11 +240,13 @@ class Dwi:
     def extract_brain(self) -> InMemoryVolumeResource:
         """Extract brain mask. This is meant to be convenient rather than efficient.
         Using this in a loop could result in unnecessary repetition of file I/O operations.
-        For efficiency, see :func:`kwneuro.masks.brain_extract_batch`.
+        For efficiency, see :func:`kwneuro.masks.brain_extract_dwi_batch`.
         """
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "brain_mask.nii.gz"
-            brain_mask = brain_extract_single(dwi=self, output_path=output_path)
+            brain_mask = brain_extract(
+                volume=self.compute_mean_b0(), output_path=output_path
+            )
             return brain_mask.load()
 
     def estimate_dti(self, mask: VolumeResource | None = None) -> Dti:

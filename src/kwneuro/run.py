@@ -43,7 +43,7 @@ def gen_masks(inputs: Path, outputs: Path) -> None:
 
     Produces output files: ``<ID>_mask.nii.gz``
     \f
-    See :func:`kwneuro.masks.brain_extract_batch` for details.
+    See :func:`kwneuro.masks.brain_extract_dwi_batch` for details.
     """
 
     cases: list[tuple[Dwi, Path]] = []
@@ -68,4 +68,4 @@ def gen_masks(inputs: Path, outputs: Path) -> None:
         )
         base_out.parent.mkdir(parents=True, exist_ok=True)
 
-    masks.brain_extract_batch(cases)
+    masks.brain_extract_dwi_batch(cases)
