@@ -365,14 +365,14 @@ def test_extract_brain(dwi3: Dwi, random_affine: np.ndarray, mocker):
             array=rng.random((2, 3, 4)), affine=random_affine
         )
         mask_on_disk = NiftiVolumeResource.save(mask_in_memory, mask_path)
-        mock_brain_extract_single = mocker.patch(
-            "kwneuro.dwi.brain_extract_single",
+        mock_brain_extract = mocker.patch(
+            "kwneuro.dwi.brain_extract",
             return_value=mask_on_disk,
         )
 
         # Test
         mask_actual = dwi3.extract_brain()
-        mock_brain_extract_single.assert_called_once_with(dwi=dwi3, output_path=ANY)
+        mock_brain_extract.assert_called_once_with(volume=ANY, output_path=ANY)
         assert np.allclose(mask_actual.get_affine(), mask_in_memory.get_affine())
         assert np.allclose(mask_actual.get_array(), mask_in_memory.get_array())
 

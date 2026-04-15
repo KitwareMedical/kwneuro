@@ -54,8 +54,11 @@ noddi = [
 combat = [
   "neuroCombat ==0.2.12",
 ]
+antspynet = [
+  "antspynet",
+]
 all = [
-  "kwneuro[hdbet,tractseg,noddi,combat]",
+  "kwneuro[hdbet,tractseg,noddi,combat,antspynet]",
 ]
 test = [
   "pytest >=6",
@@ -139,7 +142,7 @@ disallow_untyped_defs = true
 disallow_incomplete_defs = true
 
 [[tool.mypy.overrides]]
-module = ["neuroCombat.*", "HD_BET.*", "tractseg.*", "amico.*"]
+module = ["neuroCombat.*", "HD_BET.*", "tractseg.*", "amico.*", "antspynet.*"]
 ignore_missing_imports = true
 
 

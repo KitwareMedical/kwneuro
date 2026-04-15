@@ -9,7 +9,7 @@ import scipy.linalg
 
 from kwneuro.dwi import Dwi
 from kwneuro.masks import (
-    brain_extract_batch,
+    brain_extract_dwi_batch,
 )
 from kwneuro.resource import (
     InMemoryBvalResource,
@@ -57,7 +57,7 @@ def test_brain_extract_batch(
 
         mock_run_hd_bet = mocker.patch("kwneuro.masks._run_hd_bet")
 
-        brain_extract_batch(
+        brain_extract_dwi_batch(
             cases=[
                 (dwi_data_small_random, mask_out_path),
             ],

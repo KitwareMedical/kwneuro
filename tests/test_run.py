@@ -45,7 +45,7 @@ def dwi(volume_array) -> Dwi:
 
 def test_gen_masks(mocker, dwi):
     runner = CliRunner()
-    mock_brain_extract_batch = mocker.patch("kwneuro.masks.brain_extract_batch")
+    mock_brain_extract_batch = mocker.patch("kwneuro.masks.brain_extract_dwi_batch")
     with tempfile.TemporaryDirectory() as work_dir:
         input_dir = Path(work_dir) / "inputs"
         output_dir = Path(work_dir) / "outputs"
