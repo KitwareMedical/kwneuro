@@ -18,7 +18,13 @@ from kwneuro.resource import (
     InMemoryBvecResource,
     InMemoryVolumeResource,
 )
+from kwneuro.structural import StructuralImage
 from kwneuro.util import deep_equal_allclose
+
+
+@pytest.fixture
+def structural() -> StructuralImage:
+    return StructuralImage(volume=InMemoryVolumeResource(array=np.zeros((2, 2, 2))))
 
 
 @pytest.fixture
@@ -392,6 +398,24 @@ def test_dwi_denoise(dwi4: Dwi):
     assert not np.allclose(
         denoised.volume.get_array(), dwi4.volume.get_array()
     )  # should be different arrays
+
+
+def test_dwi_denoise_preserves_structural(dwi4: Dwi, structural: StructuralImage):
+    dwi_with_s = Dwi(
+        volume=dwi4.volume, bval=dwi4.bval, bvec=dwi4.bvec, structural=structural
+    )
+    denoised = dwi_with_s.denoise()
+    assert denoised.structural is structural
+
+
+def test_dwi_concatenate_preserves_structural(
+    dwi1: Dwi, dwi2: Dwi, structural: StructuralImage
+):
+    dwi_with_s = Dwi(
+        volume=dwi1.volume, bval=dwi1.bval, bvec=dwi1.bvec, structural=structural
+    )
+    result = Dwi.concatenate([dwi_with_s, dwi2])
+    assert result.structural is structural
 
 
 def test_estimate_noddi(dwi3: Dwi, mocker, tmp_path: Path, random_affine: np.ndarray):
