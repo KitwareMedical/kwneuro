@@ -6,10 +6,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from kwneuro.io import NiftiVolumeResource
+from kwneuro.resource import VolumeResource
 from kwneuro.util import PathLike, normalize_path
 
 if TYPE_CHECKING:
     from kwneuro.dwi import Dwi
+    from kwneuro.structural import StructuralImage
 
 
 def _run_hd_bet(
@@ -109,12 +111,39 @@ def _run_hd_bet(
         )
 
 
-def brain_extract_batch(
+def brain_extract(
+    volume: VolumeResource,
+    output_path: PathLike,
+    *,
+    sequential: bool = False,
+) -> NiftiVolumeResource:
+    """Run brain extraction on a single volume using HD-BET.
+
+    :param volume: Input volume to extract a brain mask from.
+    :param output_path: Output path for the brain mask.
+
+    Returns the computed brain mask.
+    """
+    output_path = normalize_path(output_path)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        vol_path = Path(tmpdir) / "input.nii.gz"
+        NiftiVolumeResource.save(volume, vol_path)
+        _run_hd_bet([str(vol_path)], [str(output_path)], sequential=sequential)
+
+    if not output_path.exists():
+        logging.error(
+            "After running brain masking, expected output does not seem to exist: %s.",
+            output_path,
+        )
+    return NiftiVolumeResource(output_path)
+
+
+def brain_extract_dwi_batch(
     cases: list[tuple[Dwi, Path]],
     *,
     sequential: bool = False,
 ) -> list[NiftiVolumeResource]:
-    """Run brain extraction on a batch of cases.
+    """Run brain extraction on a batch of DWI cases.
     HD-BET does not run in parallel, but it does have some initialization time so it helps to run cases in batches.
 
     :param cases: A list of pairs each consisting of an input Dwi and desired output path for the mask.
@@ -122,10 +151,10 @@ def brain_extract_batch(
         when running inside an embedded Python that can't safely
         ``multiprocessing.spawn`` (e.g. 3D Slicer's bundled Python).
         Default False preserves the parallelised behaviour.
+        The mean b0 of each DWI is used as the input to HD-BET.
 
     Returns a list of computed brain masks that is in correspondence with the list of input `cases`.
     """
-
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir_path = Path(tmpdir)
 
@@ -151,25 +180,40 @@ def brain_extract_batch(
     return [NiftiVolumeResource(output_path) for _, output_path in cases]
 
 
-def brain_extract_single(
-    dwi: Dwi,
-    output_path: PathLike,
+def brain_extract_structural_batch(
+    cases: list[tuple[StructuralImage, Path]],
     *,
     sequential: bool = False,
-) -> NiftiVolumeResource:
-    """Run brain extraction on a single case.
+) -> list[NiftiVolumeResource]:
+    """Run brain extraction on a batch of structural image cases.
+    HD-BET does not run in parallel, but it does have some initialization time so it helps to run cases in batches.
 
-    HD-BET has significant initialization time, so it is not advised to run this function in a loop;
-    see `brain_extract_batch`.
+    :param cases: A list of pairs each consisting of an input StructuralImage and desired output path for the mask.
+    :param sequential: Pass through to :func:`_run_hd_bet`. Set to True
+    when running inside an embedded Python that can't safely
+    ``multiprocessing.spawn`` (e.g. 3D Slicer's bundled Python).
+    Default False preserves the parallelised behaviour.
 
-    :param dwi: Input DWI
-    :param output_path: Output path for brain mask
-    :param sequential: Pass through to :func:`brain_extract_batch`.
-
-    Returns the computed brain mask.
+    Returns a list of computed brain masks that is in correspondence with the list of input `cases`.
     """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir_path = Path(tmpdir)
 
-    return brain_extract_batch(
-        [(dwi, normalize_path(output_path))],
-        sequential=sequential,
-    )[0]
+        hd_bet_input = []
+        hd_bet_output = []
+        for i, (structural, output_path) in enumerate(cases):
+            vol_path = tmpdir_path / f"structural_{i}.nii.gz"
+            NiftiVolumeResource.save(structural.volume, vol_path)
+            hd_bet_input.append(str(vol_path))
+            hd_bet_output.append(str(output_path))
+
+        _run_hd_bet(hd_bet_input, hd_bet_output, sequential=sequential)
+
+    for _, output_path in cases:
+        if not output_path.exists():
+            logging.error(
+                "After running brain masking, expected output does not seem to exist: %s.",
+                output_path,
+            )
+
+    return [NiftiVolumeResource(output_path) for _, output_path in cases]
