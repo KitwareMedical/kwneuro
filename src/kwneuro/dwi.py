@@ -224,6 +224,7 @@ class Dwi:
             volume=concatenated_volume,
             bval=concatenated_bval,
             bvec=concatenated_bvec,
+            structural=dwis[0].structural,
         )
 
     def denoise(self) -> Dwi:
@@ -235,6 +236,7 @@ class Dwi:
             volume=denoised_volume,
             bval=self.bval,
             bvec=self.bvec,
+            structural=self.structural,
         )
 
     def extract_brain(self) -> InMemoryVolumeResource:
