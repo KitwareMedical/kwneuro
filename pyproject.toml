@@ -13,7 +13,7 @@ authors = [
 description = "Processing pipelines to extract brain microstructure from diffusion MRI"
 readme = "README.md"
 license = "Apache-2.0"
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.14"
 classifiers = [
   "Development Status :: 1 - Planning",
   "Intended Audience :: Science/Research",
@@ -94,6 +94,16 @@ Changelog = "https://github.com/brain-microstructure-exploration-tools/kwneuro/r
 
 [project.scripts]
 gen_masks = "kwneuro.run:gen_masks"
+
+[tool.uv]
+# TractSeg declares fury as a required dependency but never imports it
+# anywhere in its source. Fury in turn pins vtk<9.4, which has no wheels
+# for CPython 3.13+. Drop fury (and therefore vtk) from resolution via a
+# never-matching marker. Remove this when TractSeg drops fury upstream.
+# Note: this only applies to uv installs; pip has no equivalent mechanism.
+# The `python_version < '0'` marker is always false, so the override leaves
+# fury with no applicable requirement and uv prunes it.
+override-dependencies = ["fury ; python_version < '0'"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
