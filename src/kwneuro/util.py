@@ -50,15 +50,32 @@ def update_volume_metadata(
 ) -> dict[str, Any]:
     """Use the convenience of nibabel's header class to update volume metadata.
     If intent_code is not provided then we don't modify the intent parameters.
+
+    Keys in ``metadata`` that are valid NIfTI-1 header fields flow through a
+    ``Nifti1Header`` (so they get the standard normalisation). Keys that
+    aren't NIfTI fields are preserved verbatim in the returned dict. This
+    lets ``VolumeResource`` implementations carry custom metadata alongside the
+    canonical NIfTI fields.
+
+    Note: custom (non-NIfTI) keys don't survive a NIfTI save via
+    ``NiftiVolumeResource.save`` — nibabel only writes actual header
+    fields.
     """
     header = Nifti1Header()  # convert to a nibabel header in order to get convenience functions like set_data_shape
+    valid_fields = set(header.keys())
+    extra_keys: dict[str, Any] = {}
     for key, val in metadata.items():
-        header[key] = val
+        if key in valid_fields:
+            header[key] = val
+        else:
+            extra_keys[key] = val
     header.set_data_dtype(volume_data_array.dtype)
     header.set_data_shape(volume_data_array.shape)
     if intent_code is not None:
         header.set_intent(intent_code, intent_params, intent_name)
-    return dict(header)
+    result = dict(header)
+    result.update(extra_keys)
+    return result
 
 
 def subsample_volume(volume: VolumeResource, factor: int = 2) -> InMemoryVolumeResource:
