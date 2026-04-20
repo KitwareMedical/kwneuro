@@ -304,6 +304,7 @@ def subsample_dwi(dwi: Dwi, factor: int = 2) -> Dwi:
         volume=subsample_volume(dwi.volume, factor),
         bval=dwi.bval,
         bvec=dwi.bvec,
+        structural=dwi.structural,
     )
 
 
