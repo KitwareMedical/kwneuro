@@ -187,13 +187,13 @@ objects return new domain objects:
      expensive
 
 3. **DTI Estimation** (`src/kwneuro/dti.py`):
-   - `Dti.estimate_from_dwi(dwi: Dwi, mask: VolumeResource | None) -> Dti`
+   - `Dti.estimate_dti(dwi: Dwi, mask: VolumeResource | None) -> Dti`
    - Uses DIPY's TensorModel
    - Returns 6 values per voxel (lower triangular of symmetric tensor)
    - Provides derived maps: `get_fa_md()`, `get_eig()`
 
 4. **NODDI Estimation** (`src/kwneuro/noddi.py`) — requires `kwneuro[noddi]`:
-   - `Noddi.estimate_from_dwi(dwi: Dwi, mask, dpar, n_kernel_dirs) -> Noddi`
+   - `Noddi.estimate_noddi(dwi: Dwi, mask, dpar, n_kernel_dirs) -> Noddi`
    - Uses AMICO library
    - Outputs NDI (neurite density), ODI (orientation dispersion), FWF (free
      water fraction) via `ndi`, `odi`, `fwf` properties
@@ -396,7 +396,8 @@ Follow the `Dti`/`Noddi` pattern:
 
 1. Create a dataclass with `VolumeResource`(s)
 2. Implement `load()` and `save()` methods that return new instances
-3. Add static `estimate_from_dwi()` method
+3. Add a static `estimate_<model>()` method (e.g. `Dti.estimate_dti`,
+   `Noddi.estimate_noddi`) decorated with `@cacheable`
 4. Add convenience method to `Dwi` class
 
 ### Adding a New Resource Type
