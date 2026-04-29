@@ -3,11 +3,17 @@ from __future__ import annotations
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import ants
 
+from kwneuro.cache import cacheable
 from kwneuro.resource import InMemoryVolumeResource, VolumeResource
 from kwneuro.util import PathLike, normalize_path
+
+if TYPE_CHECKING:
+    from kwneuro.dwi import Dwi
+    from kwneuro.structural import StructuralImage
 
 
 @dataclass()
@@ -206,3 +212,39 @@ def register_volumes(
     transform = TransformResource.initialize_from_ants(ants_result)
 
     return (warpedmovout, transform)
+
+
+@cacheable
+def register_dwi_to_structural(
+    dwi: Dwi,
+    structural: StructuralImage,
+    type_of_transform: str = "Rigid",
+    dwi_mask: VolumeResource | None = None,
+    structural_mask: VolumeResource | None = None,
+) -> TransformResource:
+    """Register a DWI (mean b0) to a structural (T1) image.
+
+    Convenience wrapper around :func:`register_volumes`. The returned
+    :class:`TransformResource` maps DWI space → T1 space. To warp T1-derived
+    labels back into DWI space call
+    ``transform.apply(..., invert=True, interpolation="genericLabel")``.
+    See :meth:`TransformResource.apply` for details.
+
+    Args:
+        dwi: The DWI to register. The mean b0 is used as the moving image.
+        structural: The structural image used as the fixed reference.
+        type_of_transform: The transformation model (e.g., "Rigid", "Affine", "SyN").
+        mask: Optional brain mask in DWI space (used as the moving mask).
+        structural_mask: Optional brain mask in structural space (used as the fixed mask).
+
+    Returns:
+        A :class:`TransformResource` mapping DWI space → structural space.
+    """
+    _, transform = register_volumes(
+        fixed=structural.volume,
+        moving=dwi.compute_mean_b0(),
+        type_of_transform=type_of_transform,
+        mask=structural_mask,
+        moving_mask=dwi_mask,
+    )
+    return transform

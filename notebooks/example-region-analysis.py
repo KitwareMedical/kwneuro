@@ -75,6 +75,7 @@ import numpy as np
 
 from kwneuro.dwi import Dwi
 from kwneuro.io import FslBvalResource, FslBvecResource, NiftiVolumeResource
+from kwneuro.reg import register_dwi_to_structural
 from kwneuro.structural import StructuralImage
 
 data_dir = Path(data_dir)
@@ -122,16 +123,13 @@ plt.show()
 # %% [markdown]
 # ## Load DWI data
 #
-# A `Dwi` object bundles the 4D volume, b-values, b-vectors, and an optional
-# structural reference. Passing `structural_bc` links the bias-corrected T1 to
-# the DWI, making it available for registration later.
+# A `Dwi` object bundles the 4D volume, b-values, and b-vectors.
 
 # %%
 dwi = Dwi(
     NiftiVolumeResource(data_dir / f"{basename}.nii"),
     FslBvalResource(data_dir / f"{basename}.bval"),
     FslBvecResource(data_dir / f"{basename}.bvec"),
-    structural_bc,
 ).load()
 
 vol = dwi.volume.get_array()
@@ -320,15 +318,17 @@ plt.show()
 # %% [markdown]
 # ## 6. Register DWI to T1 space (rigid body)
 #
-# A rigid-body transform (3 rotations + 3 translations) aligns the mean b=0 image
-# to the T1. A rigid transform is appropriate here because the DWI and T1 were
+# A rigid-body transform aligns the mean b=0 image to the T1.
+# A rigid transform is appropriate here because the DWI and T1 were
 # acquired in the same session — we only need to correct for minor inter-sequence
 # head motion.
 
 # %% tags=["remove-output"]
-transform = dwi_denoised.register_to_structural(
+transform = register_dwi_to_structural(
+    dwi=dwi_denoised,
+    structural=structural_bc,
     type_of_transform="Rigid",
-    mask=dwi_mask,
+    dwi_mask=dwi_mask,
     structural_mask=t1_mask,
 )
 

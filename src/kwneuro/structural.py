@@ -3,7 +3,6 @@ from __future__ import annotations
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import ants
 
@@ -11,9 +10,6 @@ from kwneuro.cache import cacheable
 from kwneuro.io import NiftiVolumeResource
 from kwneuro.resource import InMemoryVolumeResource, VolumeResource
 from kwneuro.util import PathLike, normalize_path
-
-if TYPE_CHECKING:
-    pass
 
 
 @dataclass
