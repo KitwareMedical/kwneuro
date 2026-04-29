@@ -111,7 +111,7 @@ class TransformResource:
         import json
 
         saved = self.save(cache_dir / f"{step_name}_transform")
-        index = {"fwd": saved._ants_fwd_paths, "inv": saved._ants_inv_paths}
+        index = {"fwd": saved._ants_fwd_paths, "inv": saved._ants_inv_paths}  # pylint: disable=protected-access
         (cache_dir / f"{step_name}_transform.json").write_text(json.dumps(index))
 
     @classmethod

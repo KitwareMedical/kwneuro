@@ -9,7 +9,7 @@ import ants
 from kwneuro.cache import cacheable
 from kwneuro.io import NiftiVolumeResource
 from kwneuro.resource import InMemoryVolumeResource, VolumeResource
-from kwneuro.util import PathLike, normalize_path
+from kwneuro.util import PathLike, ensure_output_dir
 
 
 @dataclass
@@ -47,11 +47,7 @@ class StructuralImage:
 
         Returns: A StructuralImage with its internal resource being on-disk.
         """
-        path = normalize_path(path)
-        if path.exists() and not path.is_dir():
-            msg = "`path` should be the desired save directory"
-            raise ValueError(msg)
-        path.mkdir(exist_ok=True, parents=True)
+        path = ensure_output_dir(path)
         return StructuralImage(
             volume=NiftiVolumeResource.save(self.volume, path / f"{basename}.nii.gz"),
         )
