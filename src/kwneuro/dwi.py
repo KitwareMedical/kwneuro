@@ -12,7 +12,7 @@ from kwneuro.cache import cacheable
 from kwneuro.denoise import denoise_dwi
 from kwneuro.dti import Dti
 from kwneuro.io import FslBvalResource, FslBvecResource, NiftiVolumeResource
-from kwneuro.masks import brain_extract_single
+from kwneuro.masks import brain_extract
 from kwneuro.noddi import Noddi
 from kwneuro.resource import (
     BvalResource,
@@ -25,7 +25,7 @@ from kwneuro.resource import (
 from kwneuro.util import (
     PathLike,
     deep_equal_allclose,
-    normalize_path,
+    ensure_output_dir,
     subsample_volume,
     update_volume_metadata,
 )
@@ -90,11 +90,7 @@ class Dwi:
 
         Returns: A Dwi with its internal resources being on-disk.
         """
-        path = normalize_path(path)
-        if path.exists() and not path.is_dir():
-            msg = "`path` should be the desired save directory"
-            raise ValueError(msg)
-        path.mkdir(exist_ok=True, parents=True)
+        path = ensure_output_dir(path)
         return Dwi(
             volume=NiftiVolumeResource.save(self.volume, path / f"{basename}.nii.gz"),
             bval=FslBvalResource.save(self.bval, path / f"{basename}.bval"),
@@ -232,11 +228,13 @@ class Dwi:
     def extract_brain(self) -> InMemoryVolumeResource:
         """Extract brain mask. This is meant to be convenient rather than efficient.
         Using this in a loop could result in unnecessary repetition of file I/O operations.
-        For efficiency, see :func:`kwneuro.masks.brain_extract_batch`.
+        For efficiency, see :func:`kwneuro.masks.brain_extract_dwi_batch`.
         """
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "brain_mask.nii.gz"
-            brain_mask = brain_extract_single(dwi=self, output_path=output_path)
+            brain_mask = brain_extract(
+                volume=self.compute_mean_b0(), output_path=output_path
+            )
             return brain_mask.load()
 
     def estimate_dti(self, mask: VolumeResource | None = None) -> Dti:

@@ -1,19 +1,27 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import ants
 import nibabel as nib
 import numpy as np
 import pytest
 
+from kwneuro import Cache
 from kwneuro.dwi import Dwi
-from kwneuro.reg import register_volumes
+from kwneuro.reg import TransformResource, register_dwi_to_structural, register_volumes
 from kwneuro.resource import (
     InMemoryBvalResource,
     InMemoryBvecResource,
     InMemoryVolumeResource,
 )
+from kwneuro.structural import StructuralImage
+
+
+@pytest.fixture
+def structural() -> StructuralImage:
+    return StructuralImage(volume=InMemoryVolumeResource(array=np.zeros((2, 2, 2))))
 
 
 @pytest.fixture
@@ -233,6 +241,40 @@ def test_register_volumes_with_incorrect_mask(dwi1: Dwi, dwi2: Dwi, small_nifti_
 
     with pytest.raises(ValueError, match="Moving mask dimensions do not match"):
         register_volumes(fixed=fixed, moving=moving, moving_mask=wrong_mask)
+
+
+def test_register_dwi_to_structural(
+    dwi1: Dwi, structural: StructuralImage, mocker, tmp_path: Path
+):
+    stub_transform = TransformResource(_ants_fwd_paths=[], _ants_inv_paths=[])
+    mock_reg = mocker.patch(
+        "kwneuro.reg.register_volumes", return_value=(MagicMock(), stub_transform)
+    )
+
+    result = register_dwi_to_structural(
+        dwi=dwi1, structural=structural, type_of_transform="Rigid"
+    )
+    mock_reg.assert_called_once()
+    call_kwargs = mock_reg.call_args.kwargs
+    assert call_kwargs["fixed"] is structural.volume
+    assert np.array_equal(
+        call_kwargs["moving"].get_array(), dwi1.compute_mean_b0().get_array()
+    )
+    assert call_kwargs["type_of_transform"] == "Rigid"
+    assert call_kwargs["mask"] is None
+    assert call_kwargs["moving_mask"] is None
+    assert type(result) is TransformResource
+
+    # caching: second call in same Cache context is a hit
+    mock_reg.reset_mock()
+    with Cache(tmp_path):
+        register_dwi_to_structural(dwi=dwi1, structural=structural)
+    assert mock_reg.call_count == 1
+
+    mock_reg.reset_mock()
+    with Cache(tmp_path):
+        register_dwi_to_structural(dwi=dwi1, structural=structural)
+    mock_reg.assert_not_called()
 
 
 def test_register_volumes_with_incorrect_dimensions(
