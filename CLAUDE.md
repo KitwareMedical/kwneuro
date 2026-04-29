@@ -180,9 +180,10 @@ objects return new domain objects:
    - Uses DIPY's Patch2Self algorithm
 
 2. **Masking** (`src/kwneuro/masks.py`) — requires `kwneuro[hdbet]`:
-   - `brain_extract_batch(cases: list[tuple[Dwi, Path]]) -> list[NiftiVolumeResource]`
-   - `brain_extract_single(dwi: Dwi, output_path: PathLike) -> NiftiVolumeResource`
-   - Uses HD-BET (deep learning) on mean b0 images
+   - `brain_extract_dwi_batch(cases: list[tuple[Dwi, Path]]) -> list[NiftiVolumeResource]`
+   - `brain_extract_structural_batch(cases: list[tuple[StructuralImage, Path]]) -> list[NiftiVolumeResource]`
+   - `brain_extract(volume: VolumeResource, output_path: PathLike) -> NiftiVolumeResource`
+   - Uses HD-BET (deep learning) on mean b0 images (DWI) or the volume directly (structural)
    - **Important**: Always prefer batch processing - HD-BET initialization is
      expensive
 
@@ -363,7 +364,7 @@ pattern:
 
 1. Recursively finds `*_dwi.nii.gz` files
 2. Constructs `Dwi` objects with on-disk resources (doesn't load!)
-3. Batches all cases and calls `brain_extract_batch()` with single HD-BET
+3. Batches all cases and calls `brain_extract_dwi_batch()` with single HD-BET
    initialization
 4. Preserves directory structure in output
 
@@ -444,7 +445,7 @@ When combining multiple `Dwi` objects:
 
 1. **Resource.get_array() on disk resources re-loads every time** - always cache
    loaded results
-2. **brain_extract_batch is strongly preferred over brain_extract_single** -
+2. **brain_extract_dwi_batch / brain_extract_structural_batch are strongly preferred over brain_extract** -
    HD-BET initialization is expensive
 3. **Dwi.concatenate uses first Dwi as reference** - order matters for multi-run
    data
