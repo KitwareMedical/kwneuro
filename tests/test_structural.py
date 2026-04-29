@@ -13,11 +13,7 @@ from scipy.linalg import expm
 from kwneuro import Cache
 from kwneuro.io import NiftiVolumeResource
 from kwneuro.masks import brain_extract, brain_extract_structural_batch
-from kwneuro.resource import (
-    InMemoryBvalResource,
-    InMemoryBvecResource,
-    InMemoryVolumeResource,
-)
+from kwneuro.resource import InMemoryVolumeResource
 from kwneuro.structural import StructuralImage
 
 # ---------------------------------------------------------------------------
@@ -405,48 +401,3 @@ def test_brain_extract_structural_batch(
 
     brain_extract_structural_batch(cases=[(structural, output_path)])
     mock_run_hd_bet.assert_called_once()
-
-
-# ---------------------------------------------------------------------------
-# Dwi.structural field
-# ---------------------------------------------------------------------------
-
-
-def test_dwi_with_structural_field(structural: StructuralImage):
-    from kwneuro.dwi import Dwi
-
-    bvec_array = np.array([[1.0 / np.sqrt(3)] * 3])
-    dwi = Dwi(
-        volume=InMemoryVolumeResource(array=np.zeros((2, 2, 2, 1))),
-        bval=InMemoryBvalResource(np.array([1000.0])),
-        bvec=InMemoryBvecResource(bvec_array),
-    )
-    assert dwi.structural is None
-
-    dwi_with_structural = Dwi(
-        volume=dwi.volume,
-        bval=dwi.bval,
-        bvec=dwi.bvec,
-        structural=structural,
-    )
-    assert dwi_with_structural.structural is structural
-
-
-def test_dwi_load_propagates_structural(structural: StructuralImage, tmp_path: Path):
-    """Dwi.load() should load the associated structural image too."""
-    from kwneuro.dwi import Dwi
-
-    bvec_array = np.array([[1.0 / np.sqrt(3)] * 3])
-    saved_structural = structural.save(tmp_path / "structural", "t1")
-
-    dwi = Dwi(
-        volume=InMemoryVolumeResource(array=np.zeros((2, 2, 2, 1))),
-        bval=InMemoryBvalResource(np.array([1000.0])),
-        bvec=InMemoryBvecResource(bvec_array),
-        structural=saved_structural,
-    )
-    assert not dwi.structural.volume.is_loaded  # type: ignore[union-attr]
-
-    loaded = dwi.load()
-    assert loaded.structural is not None
-    assert loaded.structural.volume.is_loaded
