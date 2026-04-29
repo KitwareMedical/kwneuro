@@ -4,7 +4,6 @@ import logging
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import dipy.core.gradients
 import numpy as np
@@ -15,7 +14,6 @@ from kwneuro.dti import Dti
 from kwneuro.io import FslBvalResource, FslBvecResource, NiftiVolumeResource
 from kwneuro.masks import brain_extract
 from kwneuro.noddi import Noddi
-from kwneuro.reg import TransformResource, register_volumes
 from kwneuro.resource import (
     BvalResource,
     BvecResource,
@@ -31,9 +29,6 @@ from kwneuro.util import (
     subsample_volume,
     update_volume_metadata,
 )
-
-if TYPE_CHECKING:
-    from kwneuro.structural import StructuralImage
 
 
 @dataclass
@@ -52,9 +47,6 @@ class Dwi:
     bvec: BvecResource
     """The DWI b-vectors"""
 
-    structural: StructuralImage | None = None
-    """An optional structural image (e.g. T1w) from the same imaging session."""
-
     def __post_init__(self) -> None:
         # Check that b-vectors are unit vectors whenever the b-value isn't 0
         bvecs_to_check = self.bvec.get()[self.bval.get() != 0]
@@ -68,7 +60,6 @@ class Dwi:
             volume=self.volume.load(),
             bval=self.bval.load(),
             bvec=self.bvec.load(),
-            structural=self.structural.load() if self.structural is not None else None,
         )
 
     # ------------------------------------------------------------------
@@ -225,7 +216,6 @@ class Dwi:
             volume=concatenated_volume,
             bval=concatenated_bval,
             bvec=concatenated_bvec,
-            structural=dwis[0].structural,
         )
 
     def denoise(self) -> Dwi:
@@ -237,7 +227,6 @@ class Dwi:
             volume=denoised_volume,
             bval=self.bval,
             bvec=self.bvec,
-            structural=self.structural,
         )
 
     def extract_brain(self) -> InMemoryVolumeResource:
@@ -265,34 +254,6 @@ class Dwi:
         """Estimate NODDI model parameters from this DWI. See :meth:`kwneuro.noddi.Noddi.estimate_noddi` for details."""
         return Noddi.estimate_noddi(self, mask, dpar, n_kernel_dirs)  # type: ignore[no-any-return]
 
-    def register_to_structural(
-        self,
-        type_of_transform: str = "Rigid",
-        mask: VolumeResource | None = None,
-        structural_mask: VolumeResource | None = None,
-    ) -> TransformResource:
-        """Register this DWI (mean b0) to the associated structural (T1) image. This is a
-        convenience wrapper around :func:`kwneuro.reg.register_volumes`. Requires
-        ``self.structural`` to be set.
-
-        The returned :class:`~kwneuro.reg.TransformResource` maps DWI space → T1 space.
-        To warp T1-derived labels into DWI space, call
-        ``transform.apply(..., invert=True, interpolation="genericLabel")``.
-        See :meth:`kwneuro.reg.TransformResource.apply` for details.
-        """
-        if self.structural is None:
-            msg = "register_to_structural requires a structural image; set Dwi.structural first."
-            raise ValueError(msg)
-
-        _, transform = register_volumes(
-            fixed=self.structural.volume,
-            moving=self.compute_mean_b0(),
-            type_of_transform=type_of_transform,
-            mask=structural_mask,
-            moving_mask=mask,
-        )
-        return transform
-
 
 def subsample_dwi(dwi: Dwi, factor: int = 2) -> Dwi:
     """Spatially subsample a DWI by taking every Nth voxel along each spatial axis.
@@ -304,10 +265,8 @@ def subsample_dwi(dwi: Dwi, factor: int = 2) -> Dwi:
         volume=subsample_volume(dwi.volume, factor),
         bval=dwi.bval,
         bvec=dwi.bvec,
-        structural=dwi.structural,
     )
 
 
 Dwi.denoise = cacheable(Dwi.denoise)  # type: ignore[method-assign]
 Dwi.extract_brain = cacheable(Dwi.extract_brain)  # type: ignore[method-assign]
-Dwi.register_to_structural = cacheable(Dwi.register_to_structural)  # type: ignore[method-assign]
