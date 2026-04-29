@@ -47,7 +47,7 @@ def dwi_data_small_random(affine_random) -> Dwi:
 
 
 @pytest.mark.parametrize("extension", ["nii.gz", "nii"])
-def test_brain_extract_batch(
+def test_brain_extract_dwi_batch(
     mocker,
     extension,
     dwi_data_small_random,

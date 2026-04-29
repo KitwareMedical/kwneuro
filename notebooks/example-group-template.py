@@ -77,7 +77,7 @@ import tempfile
 
 from kwneuro.dwi import Dwi
 from kwneuro.io import FslBvalResource, FslBvecResource, NiftiVolumeResource
-from kwneuro.masks import brain_extract_batch
+from kwneuro.masks import brain_extract_dwi_batch
 from kwneuro.resource import VolumeResource
 
 # Load all DWIs from the downloaded data
@@ -105,7 +105,7 @@ if SUBSAMPLE:
 with tempfile.TemporaryDirectory() as tmpdir:
     cases = [(dwi, Path(tmpdir) / f"mask_{i}.nii.gz") for i, dwi in enumerate(dwis)]
     # Load masks into memory before the temp directory is cleaned up
-    masks = [m.load() for m in brain_extract_batch(cases)]
+    masks = [m.load() for m in brain_extract_dwi_batch(cases)]
 
 # Estimate DTI and extract FA/MD
 fa_volumes: list[VolumeResource] = []
