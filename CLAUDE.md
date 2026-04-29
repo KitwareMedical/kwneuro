@@ -218,6 +218,11 @@ objects return new domain objects:
 6. **Registration** (`src/kwneuro/reg.py`):
    - `register_volumes(fixed, moving, type_of_transform, mask, moving_mask) -> tuple[InMemoryVolumeResource, TransformResource]`
      - Wraps ANTs registration; supports Rigid, Affine, SyN, etc.
+   - `register_dwi_to_structural(dwi, structural, type_of_transform, dwi_mask, structural_mask) -> TransformResource`
+     - Convenience wrapper that registers the mean b0 (moving) to a
+       `StructuralImage` (fixed). Returned transform maps DWI → structural; use
+       `transform.apply(..., invert=True, interpolation="genericLabel")` to warp
+       T1-space labels back into DWI space.
    - `TransformResource` wraps ANTs transform files (affine .mat and warp .nii)
      - `apply(fixed, moving, invert, interpolation)` applies the transform
      - `save(output_dir)` persists temporary ANTs files to a permanent location
@@ -249,6 +254,26 @@ objects return new domain objects:
      shape/affine)
    - **Important**: This is a group-level operation (like build_template), not a
      per-subject stage
+
+10. **Structural Imaging** (`src/kwneuro/structural.py`):
+    - `StructuralImage` is the structural-side analogue of `Dwi`: a small
+      dataclass wrapping a single 3D `VolumeResource` (typically a T1w) with the
+      same `load()` / `save()` / cache-protocol pattern.
+    - Methods (each `@cacheable`):
+      - `correct_bias() -> StructuralImage` — ANTsPy N4 bias field correction.
+      - `extract_brain() -> InMemoryVolumeResource` — HD-BET brain mask. Single
+        call only; for batches use
+        `kwneuro.masks.brain_extract_structural_batch`.
+      - `segment_tissues(mask=None, method="atropos" | "deep_atropos") -> InMemoryVolumeResource`
+        - `"atropos"`: ANTsPy k-means, 3 classes (1=CSF, 2=GM, 3=WM). Uses
+          `mask` if provided, else `ants.get_mask`.
+        - `"deep_atropos"`: ANTsPyNet deep segmentation, 6 classes (adds deep
+          GM, cerebellum, brainstem). **Ignores `mask`** — preprocessing is
+          handled inside the model. Requires `kwneuro[antspynet]`.
+      - `parcellate(method="dkt") -> InMemoryVolumeResource` — DKT cortical
+        labeling via ANTsPyNet. Requires `kwneuro[antspynet]`.
+    - `register_dwi_to_structural` (in `reg.py`, listed under stage 6) is the
+      bridge between this stage and DWI-space analyses.
 
 ### Pipeline Caching (`src/kwneuro/cache.py`)
 
@@ -494,6 +519,10 @@ corresponding pip extra:
 - **dmri-amico** (==2.1.1): NODDI model fitting — `pip install kwneuro[noddi]`
 - **TractSeg**: White matter tract segmentation — `pip install kwneuro[tractseg]`
 - **neuroCombat** (==0.2.12): ComBat harmonization — `pip install kwneuro[combat]`
+- **antspynet**: Deep-learning structural segmentation / parcellation
+  (`StructuralImage.segment_tissues(method="deep_atropos")`,
+  `StructuralImage.parcellate`) — `pip install kwneuro[antspynet]`. Pulls in
+  TensorFlow as a transitive dep.
 - Install all at once with `pip install kwneuro[all]`
 
 Source modules use lazy imports: the optional dependency is only imported inside
