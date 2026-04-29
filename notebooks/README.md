@@ -25,6 +25,9 @@ uv run --extra notebooks --extra combat \
 
 uv run --extra notebooks \
     jupyter notebook example-group-template.ipynb
+
+uv run --extra notebooks --extra hdbet --extra antspynet \
+    jupyter notebook example-region-analysis.ipynb
 ```
 
 ### Without uv
