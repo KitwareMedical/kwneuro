@@ -254,14 +254,16 @@ def test_register_dwi_to_structural(
     result = register_dwi_to_structural(
         dwi=dwi1, structural=structural, type_of_transform="Rigid"
     )
-    mock_reg.assert_called_once_with(
-        fixed=structural.volume,
-        moving=dwi1.compute_mean_b0(),
-        type_of_transform="Rigid",
-        mask=None,
-        moving_mask=None,
+    mock_reg.assert_called_once()
+    call_kwargs = mock_reg.call_args.kwargs
+    assert call_kwargs["fixed"] is structural.volume
+    assert np.array_equal(
+        call_kwargs["moving"].get_array(), dwi1.compute_mean_b0().get_array()
     )
-    assert isinstance(result, TransformResource)
+    assert call_kwargs["type_of_transform"] == "Rigid"
+    assert call_kwargs["mask"] is None
+    assert call_kwargs["moving_mask"] is None
+    assert type(result) is TransformResource
 
     # caching: second call in same Cache context is a hit
     mock_reg.reset_mock()

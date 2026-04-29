@@ -1,57 +1,32 @@
-# ---
-# jupyter:
-#   jupytext:
-#     formats: ipynb,py:percent
-#     text_representation:
-#       extension: .py
-#       format_name: percent
-#       format_version: '1.3'
-#       jupytext_version: 1.19.1
-#   kernelspec:
-#     display_name: Python 3 (ipykernel)
-#     language: python
-#     name: python3
-# ---
+# Regional Analysis with T1 and DWI Data
 
-# %% [markdown]
-# # Regional Analysis with T1 and DWI Data
-#
-# This notebook demonstrates how to combine structural (T1) and diffusion (DWI) MRI
-# using `kwneuro` to perform brain region-level microstructure analysis. We use the
-# CFIN multi-shell dataset from DIPY, which includes a T1 and a multi-shell DWI
-# acquisition from the same session.
-#
-# ## Pipeline overview
-#
-# 0. Download example data (CFIN multi-shell from DIPY)
-# 1. Load DWI and T1 data
-# 2. T1 bias correction
-# 3. T1 brain extraction and tissue segmentation (Atropos vs Deep Atropos)
-# 4. Cortical parcellation (DKT atlas via ANTsPyNet)
-# 5. DWI preprocessing: denoising, brain extraction, and DTI estimation
-# 6. Register DWI to T1 space (rigid body)
-# 7. Warp parcellation labels into DWI space
+This notebook demonstrates how to combine structural (T1) and diffusion (DWI) MRI
+using `kwneuro` to perform brain region-level microstructure analysis. We use the
+CFIN multi-shell dataset from DIPY, which includes a T1 and a multi-shell DWI
+acquisition from the same session.
 
-# %% [markdown] tags=["remove-cell"]
-# ### Spatial subsampling
-#
-# Configure the following to spatially subsample the data and run through the demo more quickly at lower spatial resolution.
+## Pipeline overview
 
-# %% tags=["remove-cell"]
-SUBSAMPLE = True
-SUBSAMPLE_FACTOR = 2
+0. Download example data (CFIN multi-shell from DIPY)
+1. Load DWI and T1 data
+2. T1 bias correction
+3. T1 brain extraction and tissue segmentation (Atropos vs Deep Atropos)
+4. Cortical parcellation (DKT atlas via ANTsPyNet)
+5. DWI preprocessing: denoising, brain extraction, and DTI estimation
+6. Register DWI to T1 space (rigid body)
+7. Warp parcellation labels into DWI space
 
-# %% [markdown]
-# ## 0. Download example data
-#
-# We use the CFIN multi-shell dataset from DIPY. It contains both a T1-weighted
-# structural image and a multi-shell DWI acquisition (b = 0–3000 s/mm²) from the
-# same session — having paired T1 and DWI data is essential for registration-based
-# regional analysis.
-#
-# The data is downloaded automatically on first run (~250 MB).
+## 0. Download example data
 
-# %% tags=["remove-output"]
+We use the CFIN multi-shell dataset from DIPY. It contains both a T1-weighted
+structural image and a multi-shell DWI acquisition (b = 0–3000 s/mm²) from the
+same session — having paired T1 and DWI data is essential for registration-based
+regional analysis.
+
+The data is downloaded automatically on first run (~250 MB).
+
+
+```python
 from dipy.data import fetch_cfin_multib
 
 # Download the dataset if not already present
@@ -60,14 +35,15 @@ basename = "__DTI_AX_ep2d_2_5_iso_33d_20141015095334_4"
 
 print(f"Data directory: {data_dir}")
 print(f"Files: {list(files.keys())}")
+```
 
-# %% [markdown]
-# ## 1. Load T1 data
-#
-# The T1-weighted structural image provides the anatomical reference for tissue
-# segmentation, cortical parcellation, and DWI co-registration.
+## 1. Load T1 data
 
-# %%
+The T1-weighted structural image provides the anatomical reference for tissue
+segmentation, cortical parcellation, and DWI co-registration.
+
+
+```python
 from pathlib import Path
 
 import matplotlib
@@ -93,18 +69,25 @@ struct_image = structural.volume.get_array()
 t1_mid = struct_image.shape[1] // 2
 
 print(f"T1 shape: {struct_image.shape}")
+```
 
-# %% [markdown]
-# ## 2. T1 bias correction
-#
-# RF field inhomogeneities create smooth intensity gradients across the T1 that
-# can bias tissue segmentation and parcellation. `correct_bias()` applies ANTsPy's
-# N4 bias field correction before downstream structural processing.
+    Subsampled T1 by factor 2
+    T1 shape: (128, 128, 88)
+    
 
-# %% tags=["remove-output"]
+## 2. T1 bias correction
+
+RF field inhomogeneities create smooth intensity gradients across the T1 that
+can bias tissue segmentation and parcellation. `correct_bias()` applies ANTsPy's
+N4 bias field correction before downstream structural processing.
+
+
+```python
 structural_bc = structural.correct_bias()
+```
 
-# %%
+
+```python
 t1_bc = structural_bc.volume.get_array()
 
 fig, axes = plt.subplots(1, 3, figsize=(14, 4))
@@ -120,13 +103,20 @@ for ax in axes:
     ax.axis("off")
 plt.tight_layout()
 plt.show()
+```
 
-# %% [markdown]
-# ## Load DWI data
-#
-# A `Dwi` object bundles the 4D volume, b-values, and b-vectors.
 
-# %%
+    
+![png](example-region-analysis_files/example-region-analysis_7_0.png)
+    
+
+
+## Load DWI data
+
+A `Dwi` object bundles the 4D volume, b-values, and b-vectors.
+
+
+```python
 dwi = Dwi(
     NiftiVolumeResource(data_dir / f"{basename}.nii"),
     FslBvalResource(data_dir / f"{basename}.bval"),
@@ -139,13 +129,19 @@ dwi_mid = vol.shape[2] // 2
 
 print(f"DWI shape: {vol.shape}")
 print(f"Unique b-values: {np.unique(np.round(bvals, -2))}")
+```
 
-# %% [markdown]
-# The two images have very different resolutions and field-of-view sizes — the DWI
-# covers only a portion of the brain while the T1 spans the full volume. This is
-# typical of real acquisitions and is exactly what the registration step handles.
+    DWI shape: (96, 96, 19, 496)
+    Unique b-values: [   0.  200.  400.  600.  800. 1000. 1200. 1400. 1600. 1800. 2000. 2200.
+     2400. 2600. 2800. 3000.]
+    
 
-# %%
+The two images have very different resolutions and field-of-view sizes — the DWI
+covers only a portion of the brain while the T1 spans the full volume. This is
+typical of real acquisitions and is exactly what the registration step handles.
+
+
+```python
 t1_affine = structural_bc.volume.get_affine()
 dwi_affine = dwi.volume.get_affine()
 
@@ -167,42 +163,35 @@ for ax in axes:
     ax.axis("off")
 plt.tight_layout()
 plt.show()
+```
 
-# %% [markdown]
-# ## 3. Brain extraction and tissue segmentation
-#
-# We extract a brain mask from the bias-corrected T1 using HD-BET, then compare
-# two tissue segmentation methods:
-#
-# - **Atropos** *(default)*: classical ANTsPy k-means, 3 classes — CSF (1), GM (2), WM (3).
-# - **Deep Atropos**: deep-learning segmentation via ANTsPyNet, 6 classes — CSF (1),
-#   GM (2), WM (3), deep GM (4), cerebellum (5), brainstem (6).
-#   Requires `pip install kwneuro[antspynet]`.
+    T1 voxel size:  [2. 2. 2.] mm
+    DWI voxel size: [2.5 2.5 2.5] mm
+    
 
-# %% tags=["remove-output"]
+
+    
+![png](example-region-analysis_files/example-region-analysis_11_1.png)
+    
+
+
+## 3. Brain extraction and tissue segmentation
+
+We extract a brain mask from the bias-corrected T1 using HD-BET, then compare
+two tissue segmentation methods:
+
+- **Atropos** *(default)*: classical ANTsPy k-means, 3 classes — CSF (1), GM (2), WM (3).
+- **Deep Atropos**: deep-learning segmentation via ANTsPyNet, 6 classes — CSF (1),
+  GM (2), WM (3), deep GM (4), cerebellum (5), brainstem (6).
+  Requires `pip install kwneuro[antspynet]`.
+
+
+```python
 t1_mask = structural_bc.extract_brain()
+```
 
-# %% tags=["remove-cell"]
-# (This cell fixes a few notebook output issues caused by the HD-BET masking step above)
 
-# %matplotlib inline
-
-import sys
-from IPython import get_ipython
-
-kernel = get_ipython().kernel
-sys.stdout = kernel._stdout
-
-import torch
-torch.cuda.empty_cache()  # release HD-BET GPU memory before TF starts
-
-# %% tags=["remove-cell"]
-# Allow TF to allocate GPU memory incrementally so it doesn't preempt PyTorch
-import tensorflow as tf
-for gpu in tf.config.list_physical_devices("GPU"):
-    tf.config.experimental.set_memory_growth(gpu, True)
-
-# %%
+```python
 segmentation = structural_bc.segment_tissues(mask=t1_mask)
 segmentation_deep = structural_bc.segment_tissues(method="deep_atropos")
 
@@ -244,28 +233,30 @@ for ax in axes:
     ax.axis("off")
 plt.tight_layout()
 plt.show()
+```
 
-# %% tags=["remove-cell"]
-# Free the deep_atropos Keras model from GPU memory before the DKT model loads
-import tensorflow as tf
-import gc
-tf.keras.backend.clear_session()
-gc.collect()
 
-# %% [markdown]
-# ## 4. Cortical parcellation (DKT atlas)
-#
-# `parcellate(method="dkt")` applies the Desikan-Killiany-Tourville (DKT) cortical
-# labeling via ANTsPyNet. A deep learning model assigns each cortical voxel to one of
-# approximately 84 regions directly from the T1 image.
-#
-# > **Note:** This step requires `pip install kwneuro[antspynet]` and sufficient RAM
-# > (~8 GB free) to run the deep-learning model on a full-resolution T1.
+    
+![png](example-region-analysis_files/example-region-analysis_14_0.png)
+    
 
-# %% tags=["remove-output"]
+
+## 4. Cortical parcellation (DKT atlas)
+
+`parcellate(method="dkt")` applies the Desikan-Killiany-Tourville (DKT) cortical
+labeling via ANTsPyNet. A deep learning model assigns each cortical voxel to one of
+approximately 84 regions directly from the T1 image.
+
+> **Note:** This step requires `pip install kwneuro[antspynet]` and sufficient RAM
+> (~8 GB free) to run the deep-learning model on a full-resolution T1.
+
+
+```python
 parcellation = structural_bc.parcellate(method="dkt")
+```
 
-# %%
+
+```python
 parc_arr = parcellation.get_array()
 
 labels_present = np.unique(parc_arr)
@@ -285,41 +276,35 @@ ax.axis("off")
 plt.colorbar(im, ax=ax, fraction=0.046, label="Region label")
 plt.tight_layout()
 plt.show()
+```
 
-# %% tags=["remove-cell"]
-# Free the DKT Keras model from GPU memory before the DWI pipeline runs
-import tensorflow as tf
-import gc
-tf.keras.backend.clear_session()
-gc.collect()
+    Parcellation shape: (128, 128, 88)
+    Distinct labels (including background 0): 90
+    
 
-# %% [markdown]
-# ## 5. DWI preprocessing
-#
-# Three steps prepare the DWI for registration and DTI estimation: Patch2Self
-# denoising, HD-BET brain extraction, and DIPY TensorModel fitting.
 
-# %% tags=["remove-output"]
+    
+![png](example-region-analysis_files/example-region-analysis_17_1.png)
+    
+
+
+## 5. DWI preprocessing
+
+Three steps prepare the DWI for registration and DTI estimation: Patch2Self
+denoising, HD-BET brain extraction, and DIPY TensorModel fitting.
+
+
+```python
 dwi_denoised = dwi.denoise()
+```
 
-# %% tags=["remove-output"]
+
+```python
 dwi_mask = dwi_denoised.extract_brain()
+```
 
-# %% tags=["remove-cell"]
-# (This cell fixes a few notebook output issues caused by the HD-BET masking step above)
 
-# %matplotlib inline
-
-import sys
-from IPython import get_ipython
-
-kernel = get_ipython().kernel
-sys.stdout = kernel._stdout
-
-import torch
-torch.cuda.empty_cache()  # release HD-BET GPU memory before DTI estimation
-
-# %%
+```python
 dti = dwi_denoised.estimate_dti(mask=dwi_mask)
 fa_vol, md_vol = dti.get_fa_md()
 fa = fa_vol.get_array()
@@ -341,16 +326,23 @@ for ax in axes:
     ax.axis("off")
 plt.tight_layout()
 plt.show()
+```
 
-# %% [markdown]
-# ## 6. Register DWI to T1 space (rigid body)
-#
-# A rigid-body transform aligns the mean b=0 image to the T1.
-# A rigid transform is appropriate here because the DWI and T1 were
-# acquired in the same session — we only need to correct for minor inter-sequence
-# head motion.
 
-# %% tags=["remove-output"]
+    
+![png](example-region-analysis_files/example-region-analysis_21_0.png)
+    
+
+
+## 6. Register DWI to T1 space (rigid body)
+
+A rigid-body transform aligns the mean b=0 image to the T1.
+A rigid transform is appropriate here because the DWI and T1 were
+acquired in the same session — we only need to correct for minor inter-sequence
+head motion.
+
+
+```python
 transform = register_dwi_to_structural(
     dwi=dwi_denoised,
     structural=structural_bc,
@@ -358,8 +350,10 @@ transform = register_dwi_to_structural(
     dwi_mask=dwi_mask,
     structural_mask=t1_mask,
 )
+```
 
-# %%
+
+```python
 # Verify registration quality: warp the mean b=0 forward into T1 space
 registered_b0 = transform.apply(
     fixed=structural_bc.volume,
@@ -379,18 +373,25 @@ for ax in axes:
 plt.suptitle("DWI-to-T1 registration quality check")
 plt.tight_layout()
 plt.show()
+```
 
-# %% [markdown]
-# ## 7. Warp labels into DWI space
-#
-# To analyse DTI values per brain region we need the parcel labels in the same
-# space as the DTI maps. We apply the *inverse* of the DWI→T1 transform to warp
-# both the DKT parcellation and the Atropos tissue segmentation into DWI space.
-#
-# `interpolation="genericLabel"` uses nearest-neighbour resampling, which preserves
-# integer label values without blending across region boundaries.
 
-# %%
+    
+![png](example-region-analysis_files/example-region-analysis_24_0.png)
+    
+
+
+## 7. Warp labels into DWI space
+
+To analyse DTI values per brain region we need the parcel labels in the same
+space as the DTI maps. We apply the *inverse* of the DWI→T1 transform to warp
+both the DKT parcellation and the Atropos tissue segmentation into DWI space.
+
+`interpolation="genericLabel"` uses nearest-neighbour resampling, which preserves
+integer label values without blending across region boundaries.
+
+
+```python
 parcellation_dwi = transform.apply(
     fixed=mean_b0_denoised,
     moving=parcellation,
@@ -435,3 +436,10 @@ plt.colorbar(im, ax=axes[1], fraction=0.046, ticks=[1, 2, 3])
 
 plt.tight_layout()
 plt.show()
+```
+
+
+    
+![png](example-region-analysis_files/example-region-analysis_26_0.png)
+    
+
