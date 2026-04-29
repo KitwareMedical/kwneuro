@@ -11,4 +11,5 @@ running them interactively or regenerating these pages.
 example-pipeline
 example-group-template
 example-harmonization
+example-region-analysis
 ```
