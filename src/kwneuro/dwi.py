@@ -25,7 +25,7 @@ from kwneuro.resource import (
 from kwneuro.util import (
     PathLike,
     deep_equal_allclose,
-    normalize_path,
+    ensure_output_dir,
     subsample_volume,
     update_volume_metadata,
 )
@@ -90,11 +90,7 @@ class Dwi:
 
         Returns: A Dwi with its internal resources being on-disk.
         """
-        path = normalize_path(path)
-        if path.exists() and not path.is_dir():
-            msg = "`path` should be the desired save directory"
-            raise ValueError(msg)
-        path.mkdir(exist_ok=True, parents=True)
+        path = ensure_output_dir(path)
         return Dwi(
             volume=NiftiVolumeResource.save(self.volume, path / f"{basename}.nii.gz"),
             bval=FslBvalResource.save(self.bval, path / f"{basename}.bval"),

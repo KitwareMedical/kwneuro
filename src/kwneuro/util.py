@@ -22,6 +22,16 @@ def normalize_path(path_input: PathLike) -> Path:
     return Path(path_input).expanduser().resolve()
 
 
+def ensure_output_dir(path: PathLike) -> Path:
+    """Normalize *path*, assert it is a directory (not a file), create it, and return it."""
+    resolved = normalize_path(path)
+    if resolved.exists() and not resolved.is_dir():
+        msg = "`path` should be the desired save directory"
+        raise ValueError(msg)
+    resolved.mkdir(exist_ok=True, parents=True)
+    return resolved
+
+
 def create_estimate_volume_resource(
     array: NDArray[Any], reference_volume: VolumeResource, intent_name: str
 ) -> VolumeResource:
