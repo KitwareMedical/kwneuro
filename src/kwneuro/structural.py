@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -98,6 +99,11 @@ class StructuralImage:
         if method == "atropos":
             return self._segment_atropos(mask)
         if method == "deep_atropos":
+            if mask is not None:
+                logging.warning(
+                    "segment_tissues: ignoring the provided mask because the method is %s.",
+                    method,
+                )
             return self._segment_deep_atropos()
         msg = f"Unknown segmentation method: {method!r}. Expected 'atropos' or 'deep_atropos'."
         raise ValueError(msg)
