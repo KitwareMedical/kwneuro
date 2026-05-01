@@ -71,9 +71,8 @@ t1_mid = struct_image.shape[1] // 2
 print(f"T1 shape: {struct_image.shape}")
 ```
 
-    Subsampled T1 by factor 2
-    T1 shape: (128, 128, 88)
-    
+    T1 shape: (256, 256, 176)
+
 
 ## 2. T1 bias correction
 
@@ -134,7 +133,7 @@ print(f"Unique b-values: {np.unique(np.round(bvals, -2))}")
     DWI shape: (96, 96, 19, 496)
     Unique b-values: [   0.  200.  400.  600.  800. 1000. 1200. 1400. 1600. 1800. 2000. 2200.
      2400. 2600. 2800. 3000.]
-    
+
 
 The two images have very different resolutions and field-of-view sizes — the DWI
 covers only a portion of the brain while the T1 spans the full volume. This is
@@ -165,9 +164,9 @@ plt.tight_layout()
 plt.show()
 ```
 
-    T1 voxel size:  [2. 2. 2.] mm
+    T1 voxel size:  [1. 1. 1.] mm
     DWI voxel size: [2.5 2.5 2.5] mm
-    
+
 
 
     
@@ -235,9 +234,8 @@ plt.tight_layout()
 plt.show()
 ```
 
-
     
-![png](example-region-analysis_files/example-region-analysis_14_0.png)
+![png](example-region-analysis_files/example-region-analysis_14_2.png)
     
 
 
@@ -278,9 +276,9 @@ plt.tight_layout()
 plt.show()
 ```
 
-    Parcellation shape: (128, 128, 88)
+    Parcellation shape: (256, 256, 176)
     Distinct labels (including background 0): 90
-    
+
 
 
     
