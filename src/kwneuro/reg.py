@@ -234,7 +234,7 @@ def register_dwi_to_structural(
         dwi: The DWI to register. The mean b0 is used as the moving image.
         structural: The structural image used as the fixed reference.
         type_of_transform: The transformation model (e.g., "Rigid", "Affine", "SyN").
-        mask: Optional brain mask in DWI space (used as the moving mask).
+        dwi_mask: Optional brain mask in DWI space (used as the moving mask).
         structural_mask: Optional brain mask in structural space (used as the fixed mask).
 
     Returns:
