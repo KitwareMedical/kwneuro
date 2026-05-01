@@ -38,7 +38,7 @@
 # Configure the following to spatially subsample the data and run through the demo more quickly at lower spatial resolution.
 
 # %% tags=["remove-cell"]
-SUBSAMPLE = True
+SUBSAMPLE = False
 SUBSAMPLE_FACTOR = 2
 
 # %% [markdown]
