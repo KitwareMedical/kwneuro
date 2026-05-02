@@ -43,7 +43,7 @@ hdbet = [
   "hd-bet == 2.0.1",
 ]
 tractseg = [
-  "TractSeg",
+  "tractseg",
 ]
 noddi = [
   "dmri-amico == 2.1.1",
@@ -52,7 +52,7 @@ noddi = [
   "backports.tarfile",
 ]
 combat = [
-  "neuroCombat ==0.2.12",
+  "neurocombat ==0.2.12",
 ]
 all = [
   "kwneuro[hdbet,tractseg,noddi,combat]",
