@@ -4,14 +4,24 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
     groups:
       actions:
         patterns:
           - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
   # Maintain dependencies for Python
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
+    groups:
+      python:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
