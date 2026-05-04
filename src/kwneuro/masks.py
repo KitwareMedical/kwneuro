@@ -17,7 +17,8 @@ def _run_hd_bet(
     hd_bet_output: list[str],
     device: str | None = None,
     use_tta: bool | None = None,
-) -> None:  # TODO UPDATE THE DOCSTRING!
+    sequential: bool = False,
+) -> None:
     """
     Run HD-BET inference on the given input files.
     The expensive HD-BET import and run call are isolated in this function.
@@ -27,6 +28,15 @@ def _run_hd_bet(
     :param device: A string indicating the device on which to use pytorch. Defaults to 'cuda' if available, otherwise 'cpu'.
     :param use_tta: Whether to tell HD-BET to do test time augmentation. Takes a bit longer but is a bit more accurate.
         Default is to use it if the device is GPU and omit it if the device is CPU; this is HD-BET's recommendation.
+    :param sequential: If True, run HD-BET / nnunetv2 entirely on the
+        main thread without any preprocessing / export multiprocessing
+        (using nnunetv2's ``predict_from_files_sequential``). Slower but
+        avoids ``multiprocessing.spawn`` ever firing — needed when
+        running inside an embedded Python where the main script is not
+        a normal user script (e.g. inside 3D Slicer, where the spawned
+        children fail to bootstrap the main module). GPU model
+        inference still uses CUDA when available; only the CPU-side
+        preprocessing / export parallelism is disabled.
     """
 
     try:
@@ -77,24 +87,41 @@ def _run_hd_bet(
     )
 
     logging.debug("Generate %s masks", len(hd_bet_input))
-    predictor.predict_from_files(
-        list_of_lists_or_source_folder=[[i] for i in hd_bet_input],
-        output_folder_or_list_of_truncated_output_files=hd_bet_output,
-        save_probabilities=False,
-        overwrite=True,
-        num_processes_preprocessing=4,
-        num_processes_segmentation_export=8,
-        folder_with_segs_from_prev_stage=None,
-        num_parts=1,
-        part_id=0,
-    )
+    if sequential:
+        predictor.predict_from_files_sequential(
+            list_of_lists_or_source_folder=[[i] for i in hd_bet_input],
+            output_folder_or_list_of_truncated_output_files=hd_bet_output,
+            save_probabilities=False,
+            overwrite=True,
+            folder_with_segs_from_prev_stage=None,
+        )
+    else:
+        predictor.predict_from_files(
+            list_of_lists_or_source_folder=[[i] for i in hd_bet_input],
+            output_folder_or_list_of_truncated_output_files=hd_bet_output,
+            save_probabilities=False,
+            overwrite=True,
+            num_processes_preprocessing=4,
+            num_processes_segmentation_export=8,
+            folder_with_segs_from_prev_stage=None,
+            num_parts=1,
+            part_id=0,
+        )
 
 
-def brain_extract_batch(cases: list[tuple[Dwi, Path]]) -> list[NiftiVolumeResource]:
+def brain_extract_batch(
+    cases: list[tuple[Dwi, Path]],
+    *,
+    sequential: bool = False,
+) -> list[NiftiVolumeResource]:
     """Run brain extraction on a batch of cases.
     HD-BET does not run in parallel, but it does have some initialization time so it helps to run cases in batches.
 
     :param cases: A list of pairs each consisting of an input Dwi and desired output path for the mask.
+    :param sequential: Pass through to :func:`_run_hd_bet`. Set to True
+        when running inside an embedded Python that can't safely
+        ``multiprocessing.spawn`` (e.g. 3D Slicer's bundled Python).
+        Default False preserves the parallelised behaviour.
 
     Returns a list of computed brain masks that is in correspondence with the list of input `cases`.
     """
@@ -112,7 +139,7 @@ def brain_extract_batch(cases: list[tuple[Dwi, Path]]) -> list[NiftiVolumeResour
             hd_bet_input.append(str(b0_resource.path))
             hd_bet_output.append(str(output_path))
 
-        _run_hd_bet(hd_bet_input, hd_bet_output)
+        _run_hd_bet(hd_bet_input, hd_bet_output, sequential=sequential)
 
     for _, output_path in cases:
         if not output_path.exists():
@@ -124,7 +151,12 @@ def brain_extract_batch(cases: list[tuple[Dwi, Path]]) -> list[NiftiVolumeResour
     return [NiftiVolumeResource(output_path) for _, output_path in cases]
 
 
-def brain_extract_single(dwi: Dwi, output_path: PathLike) -> NiftiVolumeResource:
+def brain_extract_single(
+    dwi: Dwi,
+    output_path: PathLike,
+    *,
+    sequential: bool = False,
+) -> NiftiVolumeResource:
     """Run brain extraction on a single case.
 
     HD-BET has significant initialization time, so it is not advised to run this function in a loop;
@@ -132,8 +164,12 @@ def brain_extract_single(dwi: Dwi, output_path: PathLike) -> NiftiVolumeResource
 
     :param dwi: Input DWI
     :param output_path: Output path for brain mask
+    :param sequential: Pass through to :func:`brain_extract_batch`.
 
     Returns the computed brain mask.
     """
 
-    return brain_extract_batch([(dwi, normalize_path(output_path))])[0]
+    return brain_extract_batch(
+        [(dwi, normalize_path(output_path))],
+        sequential=sequential,
+    )[0]

@@ -63,3 +63,24 @@ def test_brain_extract_batch(
             ],
         )
         mock_run_hd_bet.assert_called_once()  # HD_BET should have been called
+        # Default is parallel (sequential=False).
+        assert mock_run_hd_bet.call_args.kwargs.get("sequential") is False
+
+
+def test_brain_extract_batch_propagates_sequential_flag(
+    mocker,
+    dwi_data_small_random,
+):
+    """``sequential=True`` reaches ``_run_hd_bet`` so the no-multiprocessing
+    code path is used. Required by callers like the kwneuro Slicer
+    extension that can't safely ``multiprocessing.spawn``."""
+    with tempfile.TemporaryDirectory() as work_dir:
+        mask_out_path = Path(work_dir) / "aaa_mask.nii.gz"
+        mock_run_hd_bet = mocker.patch("kwneuro.masks._run_hd_bet")
+
+        brain_extract_batch(
+            cases=[(dwi_data_small_random, mask_out_path)],
+            sequential=True,
+        )
+        mock_run_hd_bet.assert_called_once()
+        assert mock_run_hd_bet.call_args.kwargs["sequential"] is True
