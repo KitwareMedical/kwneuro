@@ -1,13 +1,13 @@
 # Regional Analysis with T1 and DWI Data
 
 This notebook demonstrates how to combine structural (T1) and diffusion (DWI) MRI
-using `kwneuro` to perform brain region-level microstructure analysis. We use the
-CFIN multi-shell dataset from DIPY, which includes a T1 and a multi-shell DWI
-acquisition from the same session.
+using `kwneuro` to perform brain region-level microstructure analysis. We use a
+dataset from openneuro, which includes a T1 and a single-shell DWI
+acquisition.
 
 ## Pipeline overview
 
-0. Download example data (CFIN multi-shell from DIPY)
+0. Download example data
 1. Load DWI and T1 data
 2. T1 bias correction
 3. T1 brain extraction and tissue segmentation (Atropos vs Deep Atropos)
@@ -18,23 +18,40 @@ acquisition from the same session.
 
 ## 0. Download example data
 
-We use the CFIN multi-shell dataset from DIPY. It contains both a T1-weighted
-structural image and a multi-shell DWI acquisition (b = 0–3000 s/mm²) from the
-same session — having paired T1 and DWI data is essential for registration-based
-regional analysis.
+We download one subject from the MPI-Leipzig Mind-Brain-Body dataset ([OpenNeuro ds000221](https://openneuro.org/datasets/ds000221)). This dataset contains 64-direction single-shell DWI data (b ~ 1000 s/mm²) and a T1-weighted structural image.
 
-The data is downloaded automatically on first run (~250 MB).
+The data is downloaded automatically on first run (~100 MB).
 
 
 ```python
-from dipy.data import fetch_cfin_multib
+from pathlib import Path
 
-# Download the dataset if not already present
-files, data_dir = fetch_cfin_multib()
-basename = "__DTI_AX_ep2d_2_5_iso_33d_20141015095334_4"
+import openneuro as on
 
-print(f"Data directory: {data_dir}")
-print(f"Files: {list(files.keys())}")
+DATA_DIR = Path("example_data/ds000221")
+SUBJECT, SESSION = "sub-010002", "ses-01"
+
+t1_path = DATA_DIR / SUBJECT / SESSION / "anat" / f"{SUBJECT}_{SESSION}_acq-mp2rage_T1w.nii.gz"
+dwi_dir = DATA_DIR / SUBJECT / SESSION / "dwi"
+
+if not t1_path.exists() or not dwi_dir.exists() or not list(dwi_dir.glob("*_dwi.nii.gz")):
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    on.download(
+        dataset="ds000221",
+        target_dir=str(DATA_DIR),
+        include=[
+            "dataset_description.json",
+            f"{SUBJECT}/{SESSION}/anat/*T1w*",
+            f"{SUBJECT}/{SESSION}/dwi/*",
+        ],
+    )
+
+dwi_nii = next(dwi_dir.glob("*_dwi.nii.gz"))
+basename = dwi_nii.name.removesuffix(".nii.gz")
+
+print(f"T1 path:      {t1_path}")
+print(f"DWI dir:      {dwi_dir}")
+print(f"DWI basename: {basename}")
 ```
 
 ## 1. Load T1 data
@@ -44,8 +61,6 @@ segmentation, cortical parcellation, and DWI co-registration.
 
 
 ```python
-from pathlib import Path
-
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
@@ -55,9 +70,7 @@ from kwneuro.io import FslBvalResource, FslBvecResource, NiftiVolumeResource
 from kwneuro.reg import register_dwi_to_structural
 from kwneuro.structural import StructuralImage
 
-data_dir = Path(data_dir)
-
-structural = StructuralImage(NiftiVolumeResource(data_dir / "T1.nii")).load()
+structural = StructuralImage(NiftiVolumeResource(t1_path)).load()
 
 if SUBSAMPLE:
     from kwneuro.util import subsample_volume
@@ -66,13 +79,14 @@ if SUBSAMPLE:
     print(f"Subsampled T1 by factor {SUBSAMPLE_FACTOR}")
 
 struct_image = structural.volume.get_array()
-t1_mid = struct_image.shape[1] // 2
+t1_mid = struct_image.shape[2] // 2
+t1_slice = 170
 
 print(f"T1 shape: {struct_image.shape}")
 ```
 
-    T1 shape: (256, 256, 176)
-
+    T1 shape: (176, 240, 256)
+    
 
 ## 2. T1 bias correction
 
@@ -90,12 +104,12 @@ structural_bc = structural.correct_bias()
 t1_bc = structural_bc.volume.get_array()
 
 fig, axes = plt.subplots(1, 3, figsize=(14, 4))
-axes[0].imshow(np.rot90(struct_image[:, t1_mid, :].T, k=3), cmap="gray", origin="lower")
+axes[0].imshow(struct_image[:, :, t1_slice].T, cmap="gray", origin="lower")
 axes[0].set_title("Original T1")
-axes[1].imshow(np.rot90(t1_bc[:, t1_mid, :].T, k=3), cmap="gray", origin="lower")
+axes[1].imshow(t1_bc[:, :, t1_slice].T, cmap="gray", origin="lower")
 axes[1].set_title("Bias-corrected T1")
-diff = t1_bc[:, t1_mid, :] - struct_image[:, t1_mid, :]
-im = axes[2].imshow(np.rot90(diff.T, k=3), cmap="bwr", origin="lower")
+diff = t1_bc[:,:, t1_slice] - struct_image[:, :, t1_slice]
+im = axes[2].imshow(diff.T, cmap="bwr", origin="lower")
 axes[2].set_title("Difference (estimated bias field)")
 plt.colorbar(im, ax=axes[2], fraction=0.046)
 for ax in axes:
@@ -117,9 +131,9 @@ A `Dwi` object bundles the 4D volume, b-values, and b-vectors.
 
 ```python
 dwi = Dwi(
-    NiftiVolumeResource(data_dir / f"{basename}.nii"),
-    FslBvalResource(data_dir / f"{basename}.bval"),
-    FslBvecResource(data_dir / f"{basename}.bvec"),
+    NiftiVolumeResource(dwi_dir / f"{basename}.nii.gz"),
+    FslBvalResource(dwi_dir / f"{basename}.bval"),
+    FslBvecResource(dwi_dir / f"{basename}.bvec"),
 ).load()
 
 vol = dwi.volume.get_array()
@@ -130,10 +144,9 @@ print(f"DWI shape: {vol.shape}")
 print(f"Unique b-values: {np.unique(np.round(bvals, -2))}")
 ```
 
-    DWI shape: (96, 96, 19, 496)
-    Unique b-values: [   0.  200.  400.  600.  800. 1000. 1200. 1400. 1600. 1800. 2000. 2200.
-     2400. 2600. 2800. 3000.]
-
+    DWI shape: (128, 128, 88, 67)
+    Unique b-values: [   0. 1000.]
+    
 
 The two images have very different resolutions and field-of-view sizes — the DWI
 covers only a portion of the brain while the T1 spans the full volume. This is
@@ -156,8 +169,8 @@ mean_b0_arr = mean_b0.get_array()
 fig, axes = plt.subplots(1, 2, figsize=(10, 4))
 axes[0].imshow(mean_b0_arr[:, :, dwi_mid].T, cmap="gray", origin="lower")
 axes[0].set_title(f"Mean b=0 — {dwi_vox_size} mm, axial slice {dwi_mid}")
-axes[1].imshow(np.rot90(struct_image[:, t1_mid, :].T, k=3), cmap="gray", origin="lower")
-axes[1].set_title(f"T1w — {t1_vox_size} mm, sagittal slice {t1_mid}")
+axes[1].imshow(struct_image[:, :, t1_slice].T, cmap="gray", origin="lower")
+axes[1].set_title(f"T1w — {t1_vox_size} mm, axial slice {t1_slice}")
 for ax in axes:
     ax.axis("off")
 plt.tight_layout()
@@ -165,8 +178,8 @@ plt.show()
 ```
 
     T1 voxel size:  [1. 1. 1.] mm
-    DWI voxel size: [2.5 2.5 2.5] mm
-
+    DWI voxel size: [1.72 1.72 1.7 ] mm
+    
 
 
     
@@ -198,17 +211,17 @@ seg_arr = segmentation.get_array()
 seg_deep_arr = segmentation_deep.get_array()
 t1_mask_arr = t1_mask.get_array()
 
-t1_slc = np.rot90(t1_bc[:, t1_mid, :].T, k=3)
+t1_slc = t1_bc[:, :, t1_slice].T
 
 fig, axes = plt.subplots(1, 3, figsize=(14, 4))
 
 axes[0].imshow(t1_slc, cmap="gray", origin="lower")
-axes[0].contour(np.rot90(t1_mask_arr[:, t1_mid, :].T, k=3), colors="red", linewidths=0.8)
+axes[0].contour(t1_mask_arr[:, :, t1_slice].T, colors="red", linewidths=0.8)
 axes[0].set_title("Brain mask")
 
 axes[1].imshow(t1_slc, cmap="gray", origin="lower")
 axes[1].imshow(
-    np.ma.masked_equal(np.rot90(seg_arr[:, t1_mid, :].T, k=3), 0),
+    np.ma.masked_equal(seg_arr[:, :, t1_slice].T, 0),
     cmap=matplotlib.colormaps.get_cmap("Set1").resampled(4),
     origin="lower",
     vmin=0,
@@ -219,7 +232,7 @@ axes[1].set_title("Atropos (3-class)\n1=CSF, 2=GM, 3=WM")
 
 axes[2].imshow(t1_slc, cmap="gray", origin="lower")
 axes[2].imshow(
-    np.ma.masked_equal(np.rot90(seg_deep_arr[:, t1_mid, :].T, k=3), 0),
+    np.ma.masked_equal(seg_deep_arr[:, :, t1_slice].T, 0),
     cmap=matplotlib.colormaps.get_cmap("tab10").resampled(7),
     origin="lower",
     vmin=0,
@@ -234,8 +247,9 @@ plt.tight_layout()
 plt.show()
 ```
 
+
     
-![png](example-region-analysis_files/example-region-analysis_14_2.png)
+![png](example-region-analysis_files/example-region-analysis_14_0.png)
     
 
 
@@ -257,17 +271,24 @@ parcellation = structural_bc.parcellate(method="dkt")
 ```python
 parc_arr = parcellation.get_array()
 
+# Remap labels to sequential 1-N
 labels_present = np.unique(parc_arr)
+labels_present = labels_present[labels_present != 0] 
+label_to_idx = {label: idx + 1 for idx, label in enumerate(labels_present)}
+parc_remapped = np.vectorize(label_to_idx.get)(parc_arr, 0)  # 0 stays as background
+
 print(f"Parcellation shape: {parc_arr.shape}")
 print(f"Distinct labels (including background 0): {len(labels_present)}")
 
 fig, ax = plt.subplots(figsize=(6, 5))
-ax.imshow(np.rot90(t1_bc[:, t1_mid, :].T, k=3), cmap="gray", origin="lower")
+ax.imshow(t1_bc[:, :, t1_slice].T, cmap="gray", origin="lower")
 im = ax.imshow(
-    np.ma.masked_equal(np.rot90(parc_arr[:, t1_mid, :].T, k=3), 0),
+    np.ma.masked_equal(parc_remapped[:, :, t1_slice].T, 0),
     cmap="nipy_spectral",
     origin="lower",
     alpha=0.5,
+    vmin=1,
+    vmax=len(labels_present),
 )
 ax.set_title("DKT cortical parcellation (T1 space)")
 ax.axis("off")
@@ -276,9 +297,9 @@ plt.tight_layout()
 plt.show()
 ```
 
-    Parcellation shape: (256, 256, 176)
-    Distinct labels (including background 0): 90
-
+    Parcellation shape: (176, 240, 256)
+    Distinct labels (including background 0): 89
+    
 
 
     
@@ -344,7 +365,7 @@ head motion.
 transform = register_dwi_to_structural(
     dwi=dwi_denoised,
     structural=structural_bc,
-    type_of_transform="Rigid",
+    type_of_transform="SyN",
     dwi_mask=dwi_mask,
     structural_mask=t1_mask,
 )
@@ -360,11 +381,11 @@ registered_b0 = transform.apply(
 reg_arr = registered_b0.get_array()
 
 fig, axes = plt.subplots(1, 3, figsize=(14, 4))
-axes[0].imshow(np.rot90(t1_bc[:, t1_mid, :].T, k=3), cmap="gray", origin="lower")
+axes[0].imshow(t1_bc[:, :, t1_slice].T, cmap="gray", origin="lower")
 axes[0].set_title("T1 (fixed / reference)")
 axes[1].imshow(mean_b0_denoised_arr[:, :, dwi_mid].T, cmap="gray", origin="lower")
 axes[1].set_title("Mean b=0 (DWI space, before)")
-axes[2].imshow(np.rot90(reg_arr[:, t1_mid, :].T, k=3), cmap="gray", origin="lower")
+axes[2].imshow(reg_arr[:, :, t1_slice].T, cmap="gray", origin="lower")
 axes[2].set_title("Mean b=0 warped to T1 space (after)")
 for ax in axes:
     ax.axis("off")
@@ -398,6 +419,11 @@ parcellation_dwi = transform.apply(
 )
 parc_dwi_arr = parcellation_dwi.get_array()
 
+labels_present = np.unique(parc_dwi_arr)
+labels_present = labels_present[labels_present != 0] 
+label_to_idx = {label: idx + 1 for idx, label in enumerate(labels_present)}
+parc_dwi_remapped = np.vectorize(label_to_idx.get)(parc_dwi_arr, 0)  # 0 stays as background
+
 segmentation_dwi = transform.apply(
     fixed=mean_b0_denoised,
     moving=segmentation,
@@ -410,7 +436,7 @@ fig, axes = plt.subplots(1, 2, figsize=(10, 4))
 
 axes[0].imshow(mean_b0_denoised_arr[:, :, dwi_mid].T, cmap="gray", origin="lower")
 axes[0].imshow(
-    np.ma.masked_equal(parc_dwi_arr[:, :, dwi_mid], 0).T,
+    np.ma.masked_equal(parc_dwi_remapped[:, :, 40], 0).T,
     cmap="nipy_spectral",
     origin="lower",
     alpha=0.55,
