@@ -251,6 +251,119 @@ def register_volumes(
     return (warpedmovout, transform)
 
 
+def register_volumes_multimetric(
+    fixed: dict[str, VolumeResource],
+    moving: dict[str, VolumeResource],
+    weights: dict[str, float] | None = None,
+    mask: VolumeResource | None = None,
+    moving_mask: VolumeResource | None = None,
+) -> tuple[dict[str, InMemoryVolumeResource], TransformResource]:
+    """
+    Registers multiple moving volumes to a fixed reference using multi-metric ANTs.
+
+    The primary modality (first key) drives an initial Affine stage; all modalities
+    then contribute to a SyNOnly deformable stage via ``multivariate_extras``.
+    Requires at least two modalities; use :func:`register_volumes` for
+    single-modality registration.
+
+    Args:
+        fixed: Mapping of modality name to fixed reference volume. The first key is
+            the primary modality.
+        moving: Mapping of modality name to moving volume. Must have the same keys
+            as ``fixed``.
+        weights: Per-modality weights for the deformable stage, normalised relative
+            to the primary modality. Defaults to equal weighting.
+        mask: Optional mask for the primary fixed image (Affine stage only).
+        moving_mask: Optional mask for the primary moving image (Affine stage only).
+
+    Returns:
+        A tuple of a warped volumes dict (modality name : InMemoryVolumeResource)
+        and a :class:`TransformResource` mapping moving space to fixed space.
+
+    """
+    if set(fixed.keys()) != set(moving.keys()):
+        error_message = "fixed and moving must have the same modality keys."
+        raise ValueError(error_message)
+
+    modalities = list(fixed.keys())
+    if len(modalities) < 2:
+        error_message = (
+            "register_volumes_multimetric requires at least 2 modalities. "
+            "Use register_volumes for single-modality registration."
+        )
+        raise ValueError(error_message)
+    primary_mod = modalities[0]
+
+    # Load and validate all volumes
+    ants_fixed: dict[str, ants.ANTsImage] = {}
+    ants_moving: dict[str, ants.ANTsImage] = {}
+    for m in modalities:
+        fixed_loaded = fixed[m].load()
+        moving_loaded = moving[m].load()
+        if fixed_loaded.get_array().ndim > 3 or moving_loaded.get_array().ndim > 3:
+            error_message = "Input volume dimensions must be 2D or 3D."
+            raise ValueError(error_message)
+        ants_fixed[m] = fixed_loaded.to_ants_image()
+        ants_moving[m] = moving_loaded.to_ants_image()
+
+    ants_mask = mask.load().to_ants_image() if mask is not None else None
+    ants_moving_mask = (
+        moving_mask.load().to_ants_image() if moving_mask is not None else None
+    )
+
+    # Normalise weights relative to the primary modality
+    if weights is None:
+        weights = dict.fromkeys(modalities, 1.0)
+    norm_weights = {m: weights[m] / weights[primary_mod] for m in modalities}
+
+    # Step 1: Affine registration on primary modality
+    affine_result = ants.registration(
+        fixed=ants_fixed[primary_mod],
+        moving=ants_moving[primary_mod],
+        mask=ants_mask,
+        moving_mask=ants_moving_mask,
+        type_of_transform="Affine",
+    )
+    affine_path: str = affine_result["fwdtransforms"][-1]
+
+    # Step 2: SyNOnly deformable registration with multivariate_extras
+    multivariate_metrics = [
+        ["mattes", ants_fixed[m], ants_moving[m], norm_weights[m], 1]
+        for m in modalities[1:]
+    ]
+    deformable_result = ants.registration(
+        fixed=ants_fixed[primary_mod],
+        moving=ants_moving[primary_mod],
+        multivariate_extras=multivariate_metrics,
+        type_of_transform="SyNOnly",
+        initial_transform=affine_path,
+    )
+    warp_path: str = deformable_result["fwdtransforms"][0]
+
+    # Combine affine + warp into a TransformResource (same path layout as SyN)
+    transform = TransformResource(
+        _ants_fwd_paths=[warp_path, affine_path],
+        _ants_inv_paths=[affine_path] + deformable_result["invtransforms"],
+    )
+
+    # Warp all modalities using the combined transform
+    warped: dict[str, InMemoryVolumeResource] = {
+        primary_mod: InMemoryVolumeResource.from_ants_image(
+            deformable_result["warpedmovout"]
+        )
+    }
+    for m in modalities[1:]:
+        warped_ants = ants.apply_transforms(
+            fixed=ants_fixed[m],
+            moving=ants_moving[m],
+            transformlist=[warp_path, affine_path],
+            whichtoinvert=[False, False],
+        )
+        warped[m] = InMemoryVolumeResource.from_ants_image(warped_ants)
+
+    return warped, transform
+
+
 @cacheable
 def register_dwi_to_structural(
     dwi: Dwi,

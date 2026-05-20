@@ -11,7 +11,12 @@ import pytest
 
 from kwneuro import Cache
 from kwneuro.dwi import Dwi
-from kwneuro.reg import TransformResource, register_dwi_to_structural, register_volumes
+from kwneuro.reg import (
+    TransformResource,
+    register_dwi_to_structural,
+    register_volumes,
+    register_volumes_multimetric,
+)
 from kwneuro.resource import (
     InMemoryBvalResource,
     InMemoryBvecResource,
@@ -359,3 +364,65 @@ def test_register_volumes_with_incorrect_dimensions(
 
     with pytest.raises(ValueError, match="Input volume dimensions must be"):
         register_volumes(fixed=dwi2.volume, moving=correct_dim)
+
+
+def test_register_volumes_multimetric(dwi1: Dwi, dwi2: Dwi, tmp_path):
+    vol_fixed = dwi1.compute_mean_b0()
+    vol_moving = dwi2.compute_mean_b0()
+
+    warped, transform = register_volumes_multimetric(
+        fixed={"primary": vol_fixed, "secondary": vol_fixed},
+        moving={"primary": vol_moving, "secondary": vol_moving},
+    )
+
+    assert set(warped.keys()) == {"primary", "secondary"}
+    assert isinstance(warped["primary"], InMemoryVolumeResource)
+    assert isinstance(warped["secondary"], InMemoryVolumeResource)
+    assert warped["primary"].get_array().shape == vol_fixed.get_array().shape
+    assert warped["secondary"].get_array().shape == vol_fixed.get_array().shape
+
+    # fwd: [warp.nii.gz, affine.mat]; inv: [affine.mat, InverseWarp.nii.gz]
+    assert len(transform._ants_fwd_paths) == 2
+    assert len(transform._ants_inv_paths) == 2
+    assert transform.matrices is not None
+    assert transform.warp_fields is not None
+    assert len(transform.matrices) == 1
+    assert len(transform.warp_fields) == 1
+    assert isinstance(transform.matrices[0], ants.ANTsTransform)
+
+    # Check saving
+    transform.save(tmp_path)
+    for file in transform._ants_fwd_paths + transform._ants_inv_paths:
+        assert (tmp_path / Path(file).name).exists()
+
+    # Check application
+    applied = transform.apply(fixed=vol_fixed, moving=vol_moving)
+    assert applied.get_array().shape == vol_fixed.get_array().shape
+
+
+def test_register_volumes_multimetric_mismatched_keys(dwi1: Dwi):
+    vol = dwi1.compute_mean_b0()
+    with pytest.raises(ValueError, match="same modality keys"):
+        register_volumes_multimetric(
+            fixed={"primary": vol, "secondary": vol},
+            moving={"primary": vol, "other": vol},
+        )
+
+
+def test_register_volumes_multimetric_single_modality(dwi1: Dwi):
+    vol = dwi1.compute_mean_b0()
+    with pytest.raises(ValueError, match="at least 2 modalities"):
+        register_volumes_multimetric(
+            fixed={"primary": vol},
+            moving={"primary": vol},
+        )
+
+
+def test_register_volumes_multimetric_wrong_dimensions(dwi1: Dwi):
+    scalar = dwi1.compute_mean_b0()
+    four_d = dwi1.volume  # 4D volume
+    with pytest.raises(ValueError, match="Input volume dimensions must be"):
+        register_volumes_multimetric(
+            fixed={"primary": scalar, "secondary": four_d},
+            moving={"primary": scalar, "secondary": scalar},
+        )
