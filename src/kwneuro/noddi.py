@@ -85,6 +85,7 @@ class Noddi:
         mask: VolumeResource | None = None,
         dpar: float = 1.7e-3,
         n_kernel_dirs: int = 500,
+        regenerate_kernels: bool = True,
     ) -> Noddi:
         """Estimate Noddi from a DWI.
 
@@ -96,6 +97,8 @@ class Noddi:
                 1.7e-3 mm^2/s is used, which is suitable for white matter. For gray matter, a value of 1.3e-3 mm^2/s is recommended.
             n_kernel_dirs: The number of directions to use when generating the AMICO NODDI kernels. This value represents the total
                 count of possible orientations for the response functions across the half-sphere. Default: 500.
+            regenerate_kernels: If True, delete and recompute AMICO kernels before fitting. Set False (default)
+                for batch jobs where kernels are shared across subjects; set True only when dpar or n_kernel_dirs changes.
 
         Returns: A Noddi resource containing the estimated parameters.
         """
@@ -146,7 +149,6 @@ class Noddi:
             ae.set_model("NODDI")
             ae.model.dPar = dpar
 
-            regenerate_kernels = True
             ae.generate_kernels(regenerate=regenerate_kernels, ndirs=n_kernel_dirs)
             ae.load_kernels()
             ae.fit()
