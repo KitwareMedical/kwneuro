@@ -246,9 +246,10 @@ class Dwi:
         mask: VolumeResource | None = None,
         dpar: float = 1.7e-3,
         n_kernel_dirs: int = 500,
+        regenerate_kernels: bool = True,
     ) -> Noddi:
         """Estimate NODDI model parameters from this DWI. See :meth:`kwneuro.noddi.Noddi.estimate_noddi` for details."""
-        return Noddi.estimate_noddi(self, mask, dpar, n_kernel_dirs)  # type: ignore[no-any-return]
+        return Noddi.estimate_noddi(self, mask, dpar, n_kernel_dirs, regenerate_kernels)  # type: ignore[no-any-return]
 
 
 def subsample_dwi(dwi: Dwi, factor: int = 2) -> Dwi:
