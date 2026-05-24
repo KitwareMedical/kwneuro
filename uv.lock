@@ -2363,17 +2363,12 @@ combat = [
     { name = "neurocombat" },
 ]
 dev = [
-    { name = "antspynet" },
-    { name = "backports-tarfile" },
-    { name = "dmri-amico" },
-    { name = "hd-bet" },
     { name = "neurocombat" },
     { name = "pre-commit" },
     { name = "pylint" },
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "pytest-mock" },
-    { name = "tractseg" },
 ]
 docs = [
     { name = "furo" },
@@ -2425,9 +2420,9 @@ requires-dist = [
     { name = "ipykernel", marker = "extra == 'notebooks'" },
     { name = "ipywidgets", marker = "extra == 'notebooks'" },
     { name = "jupytext", marker = "extra == 'notebooks'" },
-    { name = "kwneuro", extras = ["all", "test"], marker = "extra == 'dev'" },
     { name = "kwneuro", extras = ["antspynet", "combat", "hdbet", "noddi", "tractseg"], marker = "extra == 'all'" },
     { name = "kwneuro", extras = ["combat"], marker = "extra == 'test'" },
+    { name = "kwneuro", extras = ["test"], marker = "extra == 'dev'" },
     { name = "matplotlib", marker = "extra == 'notebooks'" },
     { name = "myst-parser", marker = "extra == 'docs'", specifier = ">=0.13" },
     { name = "neurocombat", marker = "extra == 'combat'", specifier = "==0.2.12" },

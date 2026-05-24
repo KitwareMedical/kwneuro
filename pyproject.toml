@@ -67,7 +67,7 @@ test = [
   "kwneuro[combat]",
 ]
 dev = [
-  "kwneuro[test,all]",
+  "kwneuro[test]",
   "pre-commit",
   "pylint",
 ]
