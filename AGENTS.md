@@ -23,16 +23,18 @@ All commands use [uv](https://docs.astral.sh/uv/). The project has a committed
 ### Setup
 
 ```bash
-# Install in editable mode with dev dependencies (includes all optional extras)
+# Install in editable mode with dev and test dependencies
 uv sync --extra dev
 
 # Install pre-commit hooks
 uv run pre-commit install
 ```
 
-Note: `uv sync --extra dev` installs all optional extras (HD-BET, TractSeg,
-AMICO, neuroCombat) via the `all` extra. CI uses `uv sync --extra test` which
-only installs neuroCombat (the other optional deps are mocked in tests).
+Note: `uv sync --extra dev` installs the development and test dependencies.
+Install heavier optional extras explicitly when needed, for example
+`uv sync --extra hdbet`, `uv sync --extra tractseg`, or `uv sync --extra all`.
+CI uses `uv sync --extra test`, which only installs neuroCombat; the heavier
+optional deps are mocked in tests.
 
 ### Testing
 

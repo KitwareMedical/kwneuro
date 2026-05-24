@@ -67,6 +67,11 @@ pip install kwneuro[tractseg]   # Tract segmentation (TractSeg)
 pip install kwneuro[combat]     # ComBat harmonization (neuroCombat)
 ```
 
+Some optional extras install PyTorch-backed tools. If the selected PyTorch wheel
+does not match your GPU or NVIDIA driver, install a CPU-only or CUDA-specific
+PyTorch build appropriate for that machine before installing the extra, or use
+the matching PyTorch package index when syncing with uv.
+
 Requires Python 3.10+.
 
 ## Quick start

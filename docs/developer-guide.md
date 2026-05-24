@@ -19,13 +19,16 @@ uv sync --extra dev
 ```
 
 This creates a virtual environment under `.venv/`, installs kwneuro in editable
-mode with all development dependencies (including all optional extras), and
-respects the committed `uv.lock` for reproducible installs.
+mode with the development and test dependencies, and respects the committed
+`uv.lock` for reproducible installs.
 
 ```{note}
 CI uses `uv sync --extra test`, which installs only the lightweight optional
 deps needed for tests (neuroCombat). The heavier optional deps (HD-BET,
-TractSeg, AMICO) are mocked in tests and not required in CI.
+TractSeg, AMICO, ANTsPyNet) are mocked in tests and not required in CI. Install
+the heavier extras explicitly when you need to run those pipelines, for example
+`uv sync --extra hdbet`, `uv sync --extra tractseg`, or
+`uv sync --extra all`.
 ```
 
 Common tasks:
