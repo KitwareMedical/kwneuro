@@ -1,6 +1,7 @@
-# One-Step File Workflow
+# Use One kwneuro Step in an Existing Workflow
 
-This notebook demonstrates the quickest path from DWI files to scalar maps.
+This notebook is for projects that already have their own file-based workflow
+and want to call one `kwneuro` step without adopting a full `kwneuro` pipeline.
 It uses tiny synthetic data so it can run anywhere without downloads or
 optional pipeline dependencies.
 
@@ -73,7 +74,7 @@ write_dwi_fsl(make_synthetic_dwi(), input_dwi_path)
 print(f"Wrote example inputs under {work_dir}")
 ```
 
-    Wrote example inputs under /tmp/tmpndiswhzy
+    Wrote example inputs under /tmp/tmpy92tq859
 
 
 ## Read the files and fit DTI

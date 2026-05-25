@@ -14,9 +14,10 @@
 # ---
 
 # %% [markdown]
-# # One-Step File Workflow
+# # Use One kwneuro Step in an Existing Workflow
 #
-# This notebook demonstrates the quickest path from DWI files to scalar maps.
+# This notebook is for projects that already have their own file-based workflow
+# and want to call one `kwneuro` step without adopting a full `kwneuro` pipeline.
 # It uses tiny synthetic data so it can run anywhere without downloads or
 # optional pipeline dependencies.
 
