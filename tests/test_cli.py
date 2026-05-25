@@ -95,9 +95,7 @@ def test_dwi_mean_b0_command(dwi: Dwi, tmp_path: Path) -> None:
     assert np.allclose(read_volume(out_path).get_array(), expected)
 
 
-def test_dwi_denoise_command_writes_dwi(
-    dwi: Dwi, mocker, tmp_path: Path
-) -> None:
+def test_dwi_denoise_command_writes_dwi(dwi: Dwi, mocker, tmp_path: Path) -> None:
     dwi_path = tmp_path / "sub-01_dwi.nii.gz"
     out_path = tmp_path / "denoised.nii.gz"
     denoised = Dwi(
@@ -196,9 +194,7 @@ def test_mask_dwi_batch_command(mocker, dwi: Dwi, tmp_path: Path) -> None:
     case2_dir.mkdir(parents=True)
     write_dwi_fsl(dwi, case1_dir / "an_image_dwi.nii.gz")
     write_dwi_fsl(dwi, case2_dir / "another_image_dwi.nii.gz")
-    mock_brain_extract_batch = mocker.patch(
-        "kwneuro.cli.masks.brain_extract_dwi_batch"
-    )
+    mock_brain_extract_batch = mocker.patch("kwneuro.cli.masks.brain_extract_dwi_batch")
 
     invoke_ok(
         CliRunner(),

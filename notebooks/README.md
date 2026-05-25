@@ -17,6 +17,12 @@ uv run --with jupytext jupytext --to ipynb *.py
 Then open a specific notebook with exactly the extras it needs:
 
 ```bash
+uv run --extra notebooks \
+    jupyter notebook example-single-step.ipynb
+
+uv run --extra notebooks \
+    jupyter notebook example-custom-step.ipynb
+
 uv run --extra notebooks --extra hdbet --extra noddi --extra tractseg \
     jupyter notebook example-pipeline.ipynb
 
