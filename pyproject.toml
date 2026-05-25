@@ -96,7 +96,7 @@ Discussions = "https://github.com/brain-microstructure-exploration-tools/kwneuro
 Changelog = "https://github.com/brain-microstructure-exploration-tools/kwneuro/releases"
 
 [project.scripts]
-gen_masks = "kwneuro.run:gen_masks"
+kwneuro = "kwneuro.cli:kwneuro"
 
 [tool.uv]
 # TractSeg declares fury as a required dependency but never imports it

@@ -89,18 +89,16 @@ def test_read_dwi_fsl_infers_bids_style_sidecars(dwi: Dwi, tmp_path: Path) -> No
     assert isinstance(reloaded.bval, FslBvalResource)
     assert isinstance(reloaded.bvec, FslBvecResource)
     assert reloaded.volume.path == volume_path.resolve()
-    assert reloaded.bval.path == (
-        tmp_path / "sub-01_ses-01_acq-test_dwi.bval"
-    ).resolve()
-    assert reloaded.bvec.path == (
-        tmp_path / "sub-01_ses-01_acq-test_dwi.bvec"
-    ).resolve()
+    assert (
+        reloaded.bval.path == (tmp_path / "sub-01_ses-01_acq-test_dwi.bval").resolve()
+    )
+    assert (
+        reloaded.bvec.path == (tmp_path / "sub-01_ses-01_acq-test_dwi.bvec").resolve()
+    )
     assert_dwi_allclose(reloaded, dwi)
 
 
-def test_read_dwi_fsl_infers_sidecars_from_nii_path(
-    dwi: Dwi, tmp_path: Path
-) -> None:
+def test_read_dwi_fsl_infers_sidecars_from_nii_path(dwi: Dwi, tmp_path: Path) -> None:
     volume_path = tmp_path / "sub-01_dwi.nii"
 
     write_dwi_fsl(dwi, volume_path)
@@ -129,7 +127,7 @@ def test_read_write_dwi_fsl_accepts_explicit_sidecar_paths(
 def test_read_dwi_fsl_requires_nifti_path_for_sidecar_inference(
     tmp_path: Path,
 ) -> None:
-    with pytest.raises(ValueError, match="Expected a .nii or .nii.gz path"):
+    with pytest.raises(ValueError, match=r"Expected a \.nii or \.nii\.gz path"):
         read_dwi_fsl(tmp_path / "dwi.img")
 
 

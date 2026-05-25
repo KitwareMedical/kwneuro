@@ -41,10 +41,14 @@ def read_dwi_fsl(
     """
     volume_path = normalize_path(volume)
     bval_path = (
-        normalize_path(bval) if bval is not None else _infer_sidecar(volume_path, "bval")
+        normalize_path(bval)
+        if bval is not None
+        else _infer_sidecar(volume_path, "bval")
     )
     bvec_path = (
-        normalize_path(bvec) if bvec is not None else _infer_sidecar(volume_path, "bvec")
+        normalize_path(bvec)
+        if bvec is not None
+        else _infer_sidecar(volume_path, "bvec")
     )
 
     return Dwi(
@@ -89,9 +93,7 @@ def read_structural(path: PathLike) -> StructuralImage:
     return StructuralImage(volume=NiftiVolumeResource(path))
 
 
-def write_structural(
-    structural: StructuralImage, path: PathLike
-) -> StructuralImage:
+def write_structural(structural: StructuralImage, path: PathLike) -> StructuralImage:
     """Write a structural image to a NIfTI path and return the on-disk image."""
     output_path = _prepare_output_path(path)
     return StructuralImage(
@@ -117,7 +119,6 @@ def _strip_nifti_suffix(path: Path) -> Path:
         return path.with_suffix("")
 
     msg = (
-        f"Cannot infer FSL sidecar paths from {path}. "
-        "Expected a .nii or .nii.gz path."
+        f"Cannot infer FSL sidecar paths from {path}. Expected a .nii or .nii.gz path."
     )
     raise ValueError(msg)

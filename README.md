@@ -103,6 +103,21 @@ write_volume(noddi.volume, "output/noddi.nii.gz")
 Pass explicit `bval=` or `bvec=` paths to `read_dwi_fsl()` when your sidecars do
 not share the DWI NIfTI stem.
 
+These file helpers are convenience adapters for quick file-first workflows. The
+resource model remains the core API for custom pipelines and reusable Python
+code.
+
+## Command line
+
+Common one-step workflows are also exposed through the `kwneuro` command:
+
+```bash
+kwneuro dwi mean-b0 --dwi sub-01_dwi.nii.gz --out output/mean_b0.nii.gz
+kwneuro dwi dti --dwi sub-01_dwi.nii.gz --out-dti output/dti.nii.gz --out-fa output/fa.nii.gz --out-md output/md.nii.gz
+kwneuro mask dwi-batch --inputs bids-or-fsl-dir --outputs masks
+kwneuro structural bias-correct --image sub-01_T1w.nii.gz --out output/t1_bias_corrected.nii.gz
+```
+
 ## What's included
 
 | Capability             | What it does                                                      | Powered by  | Extra        |

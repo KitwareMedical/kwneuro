@@ -5,6 +5,7 @@
 :hidden:
 
 getting-started
+cli
 developer-guide
 Tutorials <tutorials/index>
 API Reference <autoapi/index>
