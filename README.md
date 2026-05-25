@@ -77,15 +77,11 @@ Requires Python 3.10+.
 ## Quick start
 
 ```python
-from kwneuro.dwi import Dwi
-from kwneuro.io import FslBvalResource, FslBvecResource, NiftiVolumeResource
+from kwneuro import read_dwi_fsl, write_volume
 
-# Load DWI data into memory
-dwi = Dwi(
-    NiftiVolumeResource("sub-01_dwi.nii.gz"),
-    FslBvalResource("sub-01_dwi.bval"),
-    FslBvecResource("sub-01_dwi.bvec"),
-).load()
+# Load DWI data into memory. The .bval and .bvec sidecars are inferred
+# from the DWI NIfTI path when they use the same BIDS-style stem.
+dwi = read_dwi_fsl("sub-01_dwi.nii.gz").load()
 
 # Denoise and fit DTI (core -- no extras needed)
 dwi = dwi.denoise()
@@ -98,10 +94,14 @@ mask = dwi.extract_brain()
 noddi = dwi.estimate_noddi(mask=mask)
 
 # Save everything to disk
-dti.save("output/dti.nii.gz")
-NiftiVolumeResource.save(fa, "output/fa.nii.gz")
-noddi.save("output/noddi.nii.gz")
+write_volume(dti.volume, "output/dti.nii.gz")
+write_volume(fa, "output/fa.nii.gz")
+write_volume(md, "output/md.nii.gz")
+write_volume(noddi.volume, "output/noddi.nii.gz")
 ```
+
+Pass explicit `bval=` or `bvec=` paths to `read_dwi_fsl()` when your sidecars do
+not share the DWI NIfTI stem.
 
 ## What's included
 
