@@ -8,10 +8,10 @@ running them interactively or regenerating these pages.
 ```{toctree}
 :maxdepth: 1
 
-example-single-step
-example-custom-step
 example-pipeline
 example-group-template
 example-harmonization
 example-region-analysis
+example-single-step
+example-custom-step
 ```

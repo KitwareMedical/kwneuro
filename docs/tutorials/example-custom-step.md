@@ -1,9 +1,9 @@
-# Custom Cached Pipeline Step
+# Add a Custom Step to a kwneuro Pipeline
 
-This notebook shows how to add a small project-specific step without changing
-`kwneuro` itself. The step accepts a `VolumeResource`, returns an
-`InMemoryVolumeResource`, and can use the same `Cache` context as built-in
-pipeline stages.
+This notebook is for projects that use `kwneuro` as the main pipeline driver
+and need to add a project-specific step without changing `kwneuro` itself.
+The step accepts a `VolumeResource`, returns an `InMemoryVolumeResource`, and
+can use the same `Cache` context as built-in pipeline stages.
 
 ## Create a synthetic volume
 
@@ -16,6 +16,8 @@ import nibabel as nib
 import numpy as np
 
 from kwneuro.cache import Cache, cacheable
+from kwneuro.external import temporary_volume_file
+from kwneuro.files import read_volume
 from kwneuro.resource import InMemoryVolumeResource, VolumeResource
 from kwneuro.util import update_volume_metadata
 
@@ -130,4 +132,33 @@ print(f"Lower-threshold voxels: {int(lower_threshold_mask.get_array().sum())}")
 
     Executions after parameter change: 3
     Lower-threshold voxels: 149
+
+
+## Interoperate with file-based external tools
+
+Some tools only accept filesystem paths. `kwneuro.external` provides temporary
+file helpers for those boundaries: write a fresh copy, call the external tool
+while the context is open, then explicitly re-enter `kwneuro` with the file
+helpers.
+
+
+```python
+def external_threshold_tool(input_path: Path, output_path: Path) -> None:
+    image = nib.load(input_path)
+    data = image.get_fdata()
+    thresholded = (data > data.mean()).astype(np.uint8)
+    nib.save(nib.Nifti1Image(thresholded, image.affine, image.header), output_path)
+
+
+with temporary_volume_file(volume) as input_path:
+    external_output_path = input_path.with_name("external_mask.nii.gz")
+    external_threshold_tool(input_path, external_output_path)
+    external_mask = read_volume(external_output_path).load()
+
+print(f"External-tool mask voxels: {int(external_mask.get_array().sum())}")
+print(f"Temporary input cleaned up: {not input_path.exists()}")
+```
+
+    External-tool mask voxels: 102
+    Temporary input cleaned up: True
 
