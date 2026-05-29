@@ -416,7 +416,7 @@ def test_estimate_noddi(dwi3: Dwi, mocker, tmp_path: Path, random_affine: np.nda
 
     # Test that the function is called
     noddi_actual = dwi3.estimate_noddi()
-    mock_estimate_noddi.assert_called_once_with(dwi3, None, 0.0017, 500)
+    mock_estimate_noddi.assert_called_once_with(dwi3, None, 0.0017, 500, True)
 
     # test save and reload
     path = tmp_path / "dummy_noddi.nii.gz"
