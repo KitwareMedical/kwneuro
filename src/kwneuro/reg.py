@@ -343,7 +343,7 @@ def register_volumes_multimetric(
     # Combine affine + warp into a TransformResource (same path layout as SyN)
     transform = TransformResource(
         _ants_fwd_paths=[warp_path, affine_path],
-        _ants_inv_paths=[affine_path] + deformable_result["invtransforms"],
+        _ants_inv_paths=deformable_result["invtransforms"],
     )
 
     # Warp all modalities using the combined transform
