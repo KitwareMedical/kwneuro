@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,6 +15,8 @@ from kwneuro.util import PathLike, normalize_path
 if TYPE_CHECKING:
     from kwneuro.dwi import Dwi
     from kwneuro.structural import StructuralImage
+
+TRANSFORM_MANIFEST = "transform.json"
 
 
 @dataclass()
@@ -108,18 +111,38 @@ class TransformResource:
         return [f"{step_name}_transform.json"]
 
     def _cache_save(self, cache_dir: Path, step_name: str) -> None:
-        import json
-
         saved = self.save(cache_dir / f"{step_name}_transform")
-        index = {"fwd": saved._ants_fwd_paths, "inv": saved._ants_inv_paths}  # pylint: disable=protected-access
+        index = {
+            "fwd": saved._ants_fwd_paths,
+            "inv": saved._ants_inv_paths,
+        }
         (cache_dir / f"{step_name}_transform.json").write_text(json.dumps(index))
 
     @classmethod
     def _cache_load(cls, cache_dir: Path, step_name: str) -> TransformResource:
-        import json
-
         index = json.loads((cache_dir / f"{step_name}_transform.json").read_text())
         return cls(_ants_fwd_paths=index["fwd"], _ants_inv_paths=index["inv"])
+
+    @classmethod
+    def load(cls, output_dir: PathLike) -> TransformResource:
+        """Load a saved transform directory produced by :meth:`save`."""
+        path = normalize_path(output_dir)
+        manifest_path = path / TRANSFORM_MANIFEST
+        manifest = json.loads(manifest_path.read_text())
+
+        fwd = manifest["fwd"]
+        inv = manifest["inv"]
+        if not isinstance(fwd, list) or not all(isinstance(p, str) for p in fwd):
+            msg = f"Invalid transform manifest: {manifest_path}"
+            raise ValueError(msg)
+        if not isinstance(inv, list) or not all(isinstance(p, str) for p in inv):
+            msg = f"Invalid transform manifest: {manifest_path}"
+            raise ValueError(msg)
+
+        return cls(
+            _ants_fwd_paths=[str(_resolve_manifest_path(path, p)) for p in fwd],
+            _ants_inv_paths=[str(_resolve_manifest_path(path, p)) for p in inv],
+        )
 
     def save(self, output_dir: PathLike) -> TransformResource:
         """Copies the underlying ANTs transformation files to a permanent directory
@@ -131,25 +154,45 @@ class TransformResource:
         # Files get saved with default temp names from ANTs
         copied_files = {}
         saved_fwd_paths = []
+        manifest_fwd_paths = []
         for p in self._ants_fwd_paths:
             if p not in copied_files:
                 dest = path / Path(p).name
                 shutil.copy(p, dest)
                 copied_files[p] = dest
             saved_fwd_paths.append(str(copied_files[p]))
+            manifest_fwd_paths.append(copied_files[p].relative_to(path).as_posix())
 
         saved_inv_paths = []
+        manifest_inv_paths = []
         for p in self._ants_inv_paths:
             if p not in copied_files:
                 dest = path / Path(p).name
                 shutil.copy(p, dest)
                 copied_files[p] = dest
             saved_inv_paths.append(str(copied_files[p]))
+            manifest_inv_paths.append(copied_files[p].relative_to(path).as_posix())
+
+        manifest = {"fwd": manifest_fwd_paths, "inv": manifest_inv_paths}
+        (path / TRANSFORM_MANIFEST).write_text(json.dumps(manifest, indent=2))
 
         return TransformResource(
             _ants_fwd_paths=saved_fwd_paths,
             _ants_inv_paths=saved_inv_paths,
         )
+
+
+def _resolve_manifest_path(transform_dir: Path, relative_path: str) -> Path:
+    path = Path(relative_path)
+    if path.is_absolute():
+        msg = "Transform manifest paths must be relative."
+        raise ValueError(msg)
+
+    candidate = (transform_dir / path).resolve()
+    if not candidate.is_relative_to(transform_dir):
+        msg = "Transform manifest paths must stay within the transform directory."
+        raise ValueError(msg)
+    return candidate
 
 
 def register_volumes(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -216,6 +217,29 @@ def test_register_volumes_without_warps(
     assert np.allclose(
         applied_volume_invert.get_array().shape, moving.get_array().shape
     )
+
+
+def test_transform_save_writes_reloadable_manifest(tmp_path: Path) -> None:
+    affine_path = tmp_path / "0GenericAffine.mat"
+    warp_path = tmp_path / "1Warp.nii.gz"
+    affine_path.write_text("affine")
+    warp_path.write_text("warp")
+    transform = TransformResource(
+        _ants_fwd_paths=[str(warp_path), str(affine_path)],
+        _ants_inv_paths=[str(affine_path)],
+    )
+
+    saved = transform.save(tmp_path / "saved_transform")
+    manifest_path = tmp_path / "saved_transform" / "transform.json"
+    manifest = json.loads(manifest_path.read_text())
+    loaded = TransformResource.load(tmp_path / "saved_transform")
+
+    assert manifest == {
+        "fwd": ["1Warp.nii.gz", "0GenericAffine.mat"],
+        "inv": ["0GenericAffine.mat"],
+    }
+    assert saved._ants_fwd_paths == loaded._ants_fwd_paths
+    assert saved._ants_inv_paths == loaded._ants_inv_paths
 
 
 def test_register_volumes_with_incorrect_mask(dwi1: Dwi, dwi2: Dwi, small_nifti_header):
