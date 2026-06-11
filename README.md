@@ -23,16 +23,14 @@
 
 <!-- prettier-ignore-end -->
 
-A Python-native toolkit for diffusion MRI analysis -- `pip install` and go from
-raw dMRI data to microstructure maps, fiber orientations, and tract
-segmentations without wrestling with multi-tool installations.
-
-> **Early phase, under active development.** The API may change between
-> releases.
+A Python-native toolkit for neuroimage processing -- `pip install` and go from
+raw structural images to tissue segmentations, microstructure maps, fiber
+orientations, and tract segmentations without wrestling with multi-tool
+installations.
 
 ## Why kwneuro?
 
-Diffusion MRI analysis typically requires stitching together several packages
+Neuroimaging analysis typically requires stitching together several packages
 (FSL, MRtrix3, DIPY, AMICO, ANTs, ...), each with its own installation story,
 file conventions, and coordinate quirks. kwneuro wraps the best of these tools
 behind a single, pip-installable Python interface so you can:
@@ -45,9 +43,9 @@ behind a single, pip-installable Python interface so you can:
 - **Work lazily or eagerly** -- data stays on disk until you call `.load()`, so
   you control memory usage.
 
-kwneuro is not (yet) a replacement for the full power of FSL or MRtrix3. It is a
-lightweight layer for researchers who want standard dMRI analyses with minimal
-friction.
+kwneuro is not intended to be a replacement for the full power of FSL or
+MRtrix3. It is a lightweight layer for researchers who want standard structural
+or dMRI analyses with minimal friction.
 
 <!-- GETTING-STARTED-START -->
 
@@ -112,6 +110,7 @@ code.
 Common one-step workflows are also exposed through the `kwneuro` command:
 
 ```bash
+kwneuro --help
 kwneuro dwi mean-b0 --dwi sub-01_dwi.nii.gz --out output/mean_b0.nii.gz
 kwneuro dwi dti --dwi sub-01_dwi.nii.gz --out-dti output/dti.nii.gz --out-fa output/fa.nii.gz --out-md output/md.nii.gz
 kwneuro mask dwi-batch --inputs bids-or-fsl-dir --outputs masks
