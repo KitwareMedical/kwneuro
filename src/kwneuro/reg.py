@@ -108,20 +108,14 @@ class TransformResource:
 
     @classmethod
     def _cache_files(cls, step_name: str) -> list[str]:
-        return [f"{step_name}_transform.json"]
+        return [f"{step_name}_transform/{TRANSFORM_MANIFEST}"]
 
     def _cache_save(self, cache_dir: Path, step_name: str) -> None:
-        saved = self.save(cache_dir / f"{step_name}_transform")
-        index = {
-            "fwd": saved._ants_fwd_paths,
-            "inv": saved._ants_inv_paths,
-        }
-        (cache_dir / f"{step_name}_transform.json").write_text(json.dumps(index))
+        self.save(cache_dir / f"{step_name}_transform")
 
     @classmethod
     def _cache_load(cls, cache_dir: Path, step_name: str) -> TransformResource:
-        index = json.loads((cache_dir / f"{step_name}_transform.json").read_text())
-        return cls(_ants_fwd_paths=index["fwd"], _ants_inv_paths=index["inv"])
+        return cls.load(cache_dir / f"{step_name}_transform")
 
     @classmethod
     def load(cls, output_dir: PathLike) -> TransformResource:
