@@ -1,7 +1,8 @@
-# CLAUDE.md
+# Repository Instructions
 
-This file provides guidance to Claude Code (claude.ai/code) when working with
-code in this repository.
+This file provides guidance for automated or assisted coding work in this
+repository. Treat `docs/developer-guide.md` as the canonical development guide;
+keep this file aligned with it when workflows change.
 
 ## Project Overview
 
@@ -43,7 +44,7 @@ optional deps are mocked in tests.
 uv run pytest
 
 # Run with coverage
-uv run pytest --cov
+uv run pytest --cov=kwneuro
 
 # Run a single test file
 uv run pytest tests/test_dwi.py
@@ -75,14 +76,30 @@ uv run --extra docs sphinx-build -n -T docs docs/_build/html
 # Live rebuild docs
 uv run --extra docs sphinx-autobuild -n -T docs docs/_build/html
 
-# Rebuild tutorial pages from notebooks (needs notebook extras)
+# Rebuild all tutorial pages from notebooks (needs notebook extras)
 uv run --extra notebooks --extra all python scripts/update-notebook-pages.py
+
+# Rebuild one tutorial page with only the extras it needs
+uv run --extra notebooks --extra combat python scripts/update-notebook-pages.py \
+    notebooks/example-harmonization.py
 ```
 
 The developer guide lives at `docs/developer-guide.md` (canonical source;
 `.github/CONTRIBUTING.md` is a thin redirect). Tutorial pages under
 `docs/tutorials/` are pre-rendered from `notebooks/*.py` via the
 `scripts/update-notebook-pages.py` script and committed to git.
+
+Example notebooks under `notebooks/` are Jupytext percent-format Python files.
+Convert them before running interactively:
+
+```bash
+cd notebooks
+uv run --with jupytext jupytext --to ipynb *.py
+uv run --extra notebooks jupyter notebook example-single-step.ipynb
+```
+
+Use the notebook-specific optional extras listed in `notebooks/README.md` when
+running notebooks that exercise heavier backends.
 
 ### Package Build
 
@@ -95,11 +112,17 @@ uv build
 
 ### Verification checklist
 
-After a chunk of development, run all three before committing:
+Before a change is ready to commit, run the checks relevant to the changed
+surface area and report any skipped checks explicitly. For normal code changes,
+run at least:
 
-1. `uv run --extra dev pre-commit run -a` — linting, formatting, type checking
-2. `uv run --extra dev pytest` — tests
-3. `uv run --extra docs sphinx-build -n -T docs docs/_build/html` — docs build (catches broken cross-references)
+1. `uv run pre-commit run -a` — linting, formatting, type checking
+2. `uv run pytest` — tests
+3. `uv run --extra docs sphinx-build -n -T docs docs/_build/html` — docs build when docs, public API, or cross-references changed
+
+For broad or release-facing changes, run all three. During development, use
+targeted `uv run pytest ...` commands for quick feedback, then run the broader
+checks before declaring the work ready.
 
 ## Architecture
 
@@ -386,14 +409,29 @@ pipelines do not interfere with each other.
 
 ### CLI Integration
 
-The `gen_masks` command (`src/kwneuro/run.py`) demonstrates the batch processing
-pattern:
+The `kwneuro` command is implemented in `src/kwneuro/cli.py` and exposed by the
+`kwneuro = "kwneuro.cli:kwneuro"` project script. It provides file-based entry
+points for common one-step workflows; use the Python API for custom pipelines
+and finer resource control.
 
-1. Recursively finds `*_dwi.nii.gz` files
-2. Constructs `Dwi` objects with on-disk resources (doesn't load!)
-3. Batches all cases and calls `brain_extract_dwi_batch()` with single HD-BET
-   initialization
-4. Preserves directory structure in output
+Current command groups include:
+
+- `kwneuro dwi ...` for mean b0, denoising, and DTI workflows
+- `kwneuro mask ...` for batch DWI and structural brain extraction
+- `kwneuro registration ...` for volume registration, DWI-to-structural
+  registration, and transform application
+- `kwneuro structural ...` for bias correction, brain extraction, tissue
+  segmentation, and parcellation
+
+The batch mask commands demonstrate the preferred HD-BET pattern:
+
+1. `kwneuro mask dwi-batch` recursively finds `*_dwi.nii.gz` files;
+   `kwneuro mask structural-batch` recursively finds `*.nii.gz` files
+2. Constructs lazy `Dwi` / `StructuralImage` objects with on-disk resources
+3. Batches all cases and calls the corresponding `brain_extract_*_batch()`
+   function with a single HD-BET initialization
+4. Preserves relative directory structure in output and writes `_mask.nii.gz`
+   files
 
 ## Extension Points
 
@@ -481,7 +519,7 @@ When combining multiple `Dwi` objects:
    to tmpdir
 5. **All save() methods return new objects** - functional style, never mutate
    originals
-6. **gen_masks operates on mean b0 images** - not the full DWI volume
+6. **`kwneuro mask dwi-batch` operates on mean b0 images** - not the full DWI volume
 7. **CSD response estimation uses only b<=1200 data** - higher b-values aren't
    good for the DTI model used internally by DIPY's response estimation
 8. **TransformResource files start in temp directories** - must call `save()` to
