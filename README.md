@@ -23,25 +23,26 @@
 
 <!-- prettier-ignore-end -->
 
-A Python-native toolkit for neuroimage processing -- `pip install` and go from
-raw structural images to tissue segmentations, microstructure maps, fiber
-orientations, and tract segmentations without wrestling with multi-tool
-installations.
+kwneuro is a Python package for building MRI analysis workflows around diffusion
+microstructure and structural MRI data.
 
-## Why kwneuro?
+It works with ordinary NIfTI images and FSL-style `.bval`/`.bvec` files, then
+gives you composable Python objects for common steps: denoising, DTI, NODDI,
+CSD, brain masks, T1 bias correction, tissue segmentation, parcellation,
+registration, template building, harmonization, and cached reruns of expensive
+work.
 
-Neuroimaging analysis typically requires stitching together several packages
-(FSL, MRtrix3, DIPY, AMICO, ANTs, ...), each with its own installation story,
-file conventions, and coordinate quirks. kwneuro wraps the best of these tools
-behind a single, pip-installable Python interface so you can:
+## What kwneuro is for
 
-- **Get started fast** -- core analysis (DTI, CSD, registration, template
-  building) works out of the box. Additional tools (brain extraction, NODDI,
-  tract segmentation, harmonization) are available as optional extras.
-- **Swap models easily** -- go from DTI to NODDI to CSD without rewriting your
-  script.
-- **Work lazily or eagerly** -- data stays on disk until you call `.load()`, so
-  you control memory usage.
+kwneuro is designed for workflows that:
+
+- fit diffusion microstructure models and write scalar maps such as FA, MD, NDI,
+  ODI, and free-water fraction;
+- combine DWI and structural MRI data through masking, registration,
+  segmentation, and region-level analysis;
+- build study-specific templates or harmonize scalar maps across sites;
+- write Python pipeline code without managing each backend tool's file formats
+  and coordinate conventions yourself.
 
 kwneuro is not intended to be a replacement for the full power of FSL or
 MRtrix3. It is a lightweight layer for researchers who want standard structural
@@ -52,58 +53,82 @@ or dMRI analyses with minimal friction.
 ## Installation
 
 ```bash
-pip install kwneuro             # Core (DTI, CSD, registration, templates)
-pip install kwneuro[all]        # Everything including optional extras
+pip install kwneuro              # Core DWI, structural, registration, templates
+pip install "kwneuro[all]"       # All optional backends
 ```
 
 Individual optional extras can also be installed separately:
 
 ```bash
-pip install kwneuro[hdbet]      # Brain extraction (HD-BET)
-pip install kwneuro[noddi]      # NODDI estimation (AMICO)
-pip install kwneuro[tractseg]   # Tract segmentation (TractSeg)
-pip install kwneuro[combat]     # ComBat harmonization (neuroCombat)
+pip install "kwneuro[hdbet]"      # Brain extraction (HD-BET)
+pip install "kwneuro[noddi]"      # NODDI estimation (AMICO)
+pip install "kwneuro[tractseg]"   # Tract segmentation (TractSeg)
+pip install "kwneuro[combat]"     # ComBat harmonization (neuroCombat)
+pip install "kwneuro[antspynet]"  # Deep structural segmentation/parcellation
 ```
 
-Some optional extras install PyTorch-backed tools. If the selected PyTorch wheel
-does not match your GPU or NVIDIA driver, install a CPU-only or CUDA-specific
-PyTorch build appropriate for that machine before installing the extra, or use
-the matching PyTorch package index when syncing with uv.
+Some optional extras install PyTorch- or TensorFlow-backed tools. If the
+selected wheel does not match your GPU or driver, install the CPU-only or
+CUDA-specific backend appropriate for that machine before installing the extra.
 
-Requires Python 3.10+.
+Requires Python 3.10-3.13.
 
-## Quick start
+## Quick starts
+
+### DWI microstructure
 
 ```python
 from kwneuro import read_dwi_fsl, write_volume
 
-# Load DWI data into memory. The .bval and .bvec sidecars are inferred
-# from the DWI NIfTI path when they use the same BIDS-style stem.
+# .bval and .bvec are inferred from the DWI NIfTI path when they
+# use the same BIDS-style stem.
 dwi = read_dwi_fsl("sub-01_dwi.nii.gz").load()
 
-# Denoise and fit DTI (core -- no extras needed)
-dwi = dwi.denoise()
-dti = dwi.estimate_dti()
+dwi_denoised = dwi.denoise()
+dti = dwi_denoised.estimate_dti()
 fa, md = dti.get_fa_md()
 
-# Brain extraction and NODDI require optional extras:
-#   pip install kwneuro[hdbet,noddi]
-mask = dwi.extract_brain()
-noddi = dwi.estimate_noddi(mask=mask)
-
-# Save everything to disk
 write_volume(dti.volume, "output/dti.nii.gz")
 write_volume(fa, "output/fa.nii.gz")
 write_volume(md, "output/md.nii.gz")
-write_volume(noddi.volume, "output/noddi.nii.gz")
 ```
 
-Pass explicit `bval=` or `bvec=` paths to `read_dwi_fsl()` when your sidecars do
+Pass explicit `bval=` or `bvec=` paths to `read_dwi_fsl()` when those files do
 not share the DWI NIfTI stem.
 
-These file helpers are convenience adapters for quick file-first workflows. The
-resource model remains the core API for custom pipelines and reusable Python
-code.
+### Structural MRI
+
+```python
+from kwneuro import read_structural, write_structural, write_volume
+
+t1 = read_structural("sub-01_T1w.nii.gz").load()
+
+t1_corrected = t1.correct_bias()
+tissue_labels = t1_corrected.segment_tissues()
+
+write_structural(t1_corrected, "output/sub-01_T1w_n4.nii.gz")
+write_volume(tissue_labels, "output/sub-01_tissues.nii.gz")
+```
+
+The file helpers are convenience adapters for file-first scripts and notebooks.
+The resource model remains the core API for reusable pipelines.
+
+## Caching
+
+Wrap pipeline code in a `Cache` context to persist outputs and reuse them when
+the same inputs and parameters are seen again:
+
+```python
+from kwneuro import Cache, read_dwi_fsl
+
+dwi = read_dwi_fsl("sub-01_dwi.nii.gz")
+
+with Cache("cache/sub-01"):
+    dwi_denoised = dwi.denoise()
+    dti = dwi_denoised.estimate_dti()
+```
+
+Outside a `Cache` context, the same functions run normally.
 
 ## Command line
 
@@ -111,41 +136,49 @@ Common one-step workflows are also exposed through the `kwneuro` command:
 
 ```bash
 kwneuro --help
-kwneuro dwi mean-b0 --dwi sub-01_dwi.nii.gz --out output/mean_b0.nii.gz
-kwneuro dwi dti --dwi sub-01_dwi.nii.gz --out-dti output/dti.nii.gz --out-fa output/fa.nii.gz --out-md output/md.nii.gz
-kwneuro mask dwi-batch --inputs bids-or-fsl-dir --outputs masks
-kwneuro structural bias-correct --image sub-01_T1w.nii.gz --out output/t1_bias_corrected.nii.gz
+
+kwneuro dwi dti \
+  --dwi sub-01_dwi.nii.gz \
+  --out-dti output/dti.nii.gz \
+  --out-fa output/fa.nii.gz \
+  --out-md output/md.nii.gz
+
+kwneuro structural segment-tissues \
+  --image sub-01_T1w.nii.gz \
+  --out output/tissues.nii.gz
+
+kwneuro registration dwi-to-structural \
+  --dwi sub-01_dwi.nii.gz \
+  --structural sub-01_T1w.nii.gz \
+  --out-transform output/dwi_to_t1_transform
 ```
 
 ## What's included
 
-| Capability             | What it does                                                      | Powered by  | Extra        |
-| ---------------------- | ----------------------------------------------------------------- | ----------- | ------------ |
-| **Denoising**          | Patch2Self self-supervised denoising                              | DIPY        |              |
-| **Brain extraction**   | Deep-learning brain masking from mean b=0                         | HD-BET      | `[hdbet]`    |
-| **DTI**                | Tensor fitting, FA, MD, eigenvalue decomposition                  | DIPY        |              |
-| **NODDI**              | Neurite density, orientation dispersion, free water fraction      | AMICO       | `[noddi]`    |
-| **CSD**                | Fiber orientation distributions and peak extraction               | DIPY        |              |
-| **Tract segmentation** | 72 white-matter bundles from CSD peaks                            | TractSeg    | `[tractseg]` |
-| **Registration**       | Pairwise registration (rigid, affine, SyN)                        | ANTs        |              |
-| **Template building**  | Iterative unbiased population templates (single- or multi-metric) | ANTs        |              |
-| **Harmonization**      | ComBat site-effect removal for multi-site scalar maps             | neuroCombat | `[combat]`   |
+| Area            | Capability                                             | Powered by  | Install       |
+| --------------- | ------------------------------------------------------ | ----------- | ------------- |
+| **DWI**         | Patch2Self denoising, DTI, FA/MD, CSD response/peaks   | DIPY        | core          |
+| **DWI**         | NODDI maps: NDI, ODI, free-water fraction              | AMICO       | `[noddi]`     |
+| **DWI**         | White-matter tract segmentation from CSD peaks         | TractSeg    | `[tractseg]`  |
+| **Structural**  | N4 bias correction and Atropos tissue segmentation     | ANTsPy      | core          |
+| **Structural**  | Brain extraction                                       | HD-BET      | `[hdbet]`     |
+| **Structural**  | Deep Atropos segmentation and DKT parcellation         | ANTsPyNet   | `[antspynet]` |
+| **Cross-modal** | DWI/T1 registration, transforms, and template building | ANTsPy      | core          |
+| **Group data**  | ComBat harmonization of scalar maps                    | neuroCombat | `[combat]`    |
+| **Pipelines**   | Lazy resources, file helpers, CLI commands, caching    | kwneuro     | core          |
 
 <!-- GETTING-STARTED-END -->
 
-## Example notebooks
+## Tutorials
 
-The
-[`notebooks/`](https://github.com/brain-microstructure-exploration-tools/kwneuro/tree/main/notebooks)
-directory contains Jupytext notebooks you can run end-to-end:
+Start with the tutorial that matches the job:
 
-- **[example-pipeline.py](https://github.com/brain-microstructure-exploration-tools/kwneuro/blob/main/notebooks/example-pipeline.py)**
-  -- Single-subject walkthrough: loading, denoising, brain extraction, DTI,
-  NODDI, CSD, and TractSeg.
-- **[example-group-template.py](https://github.com/brain-microstructure-exploration-tools/kwneuro/blob/main/notebooks/example-group-template.py)**
-  -- Multi-subject FA/MD template construction using iterative registration.
-- **[example-harmonization.py](https://github.com/brain-microstructure-exploration-tools/kwneuro/blob/main/notebooks/example-harmonization.py)**
-  -- ComBat harmonization of multi-site scalar maps.
+- [Run a single-subject DWI microstructure pipeline](https://kwneuro.readthedocs.io/en/latest/tutorials/example-pipeline.html)
+- [Combine T1 and DWI data for region-level analysis](https://kwneuro.readthedocs.io/en/latest/tutorials/example-region-analysis.html)
+- [Build a population template](https://kwneuro.readthedocs.io/en/latest/tutorials/example-group-template.html)
+- [Harmonize multi-site scalar maps](https://kwneuro.readthedocs.io/en/latest/tutorials/example-harmonization.html)
+- [Use one kwneuro step in an existing non-kwneuroworkflow](https://kwneuro.readthedocs.io/en/latest/tutorials/example-single-step.html)
+- [Add a custom non-kwneuro step to a kwneuro pipeline](https://kwneuro.readthedocs.io/en/latest/tutorials/example-custom-step.html)
 
 ## Contributing
 
