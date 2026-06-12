@@ -242,6 +242,53 @@ def test_transform_save_writes_reloadable_manifest(tmp_path: Path) -> None:
     assert saved._ants_inv_paths == loaded._ants_inv_paths
 
 
+def test_register_dwi_to_structural_caches_transform_files(
+    dwi1: Dwi, structural: StructuralImage, mocker, tmp_path: Path
+) -> None:
+    source_dir = tmp_path / "source_transform"
+    source_dir.mkdir()
+    affine_path = source_dir / "0GenericAffine.mat"
+    warp_path = source_dir / "1Warp.nii.gz"
+    affine_path.write_text("affine")
+    warp_path.write_text("warp")
+    source_transform = TransformResource(
+        _ants_fwd_paths=[str(warp_path), str(affine_path)],
+        _ants_inv_paths=[str(affine_path)],
+    )
+    mock_reg = mocker.patch(
+        "kwneuro.reg.register_volumes",
+        return_value=(MagicMock(), source_transform),
+    )
+    cache = Cache(tmp_path)
+
+    with cache:
+        first = register_dwi_to_structural(dwi=dwi1, structural=structural)
+
+    cache_dir = tmp_path / "register_dwi_to_structural_transform"
+    assert mock_reg.call_count == 1
+    assert cache.status([register_dwi_to_structural])["register_dwi_to_structural"]
+    assert json.loads((cache_dir / "transform.json").read_text()) == {
+        "fwd": ["1Warp.nii.gz", "0GenericAffine.mat"],
+        "inv": ["0GenericAffine.mat"],
+    }
+    assert [Path(p).name for p in first._ants_fwd_paths] == [
+        "1Warp.nii.gz",
+        "0GenericAffine.mat",
+    ]
+    assert [Path(p).name for p in first._ants_inv_paths] == ["0GenericAffine.mat"]
+    for path in first._ants_fwd_paths + first._ants_inv_paths:
+        assert Path(path).exists()
+        assert Path(path).parent == cache_dir
+
+    mock_reg.reset_mock()
+    with cache:
+        second = register_dwi_to_structural(dwi=dwi1, structural=structural)
+
+    mock_reg.assert_not_called()
+    assert second._ants_fwd_paths == first._ants_fwd_paths
+    assert second._ants_inv_paths == first._ants_inv_paths
+
+
 def test_register_volumes_with_incorrect_mask(dwi1: Dwi, dwi2: Dwi, small_nifti_header):
     fixed = dwi1.compute_mean_b0()
     moving = dwi2.compute_mean_b0()
