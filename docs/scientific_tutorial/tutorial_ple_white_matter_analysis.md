@@ -2,14 +2,14 @@
 
 ## A Voxelwise dMRI Study using ABCD 6.0 and kwneuro
 
+> **Incomplete.** This tutorial has some incomplete sections that may be filled
+> out in the future.
+
 > **How to read this tutorial.** This document describes a real clinical study
 > investigating white matter differences in adolescents with psychotic-like
 > experiences. It includes illustrative Python code using the `kwneuro` library
 > to demonstrate how the pipeline was implemented; the reader does not need to
 > run the code to follow the study.
-
-    /nas/longleaf/home/sadhanar/miniconda3/envs/abcd/lib/python3.10/site-packages/tqdm/auto.py:21: TqdmWarning: IProgress not found. Please update jupyter and ipywidgets. See https://ipywidgets.readthedocs.io/en/stable/user_install.html
-      from .autonotebook import tqdm as notebook_tqdm
 
 ---
 
