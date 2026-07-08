@@ -40,6 +40,8 @@ html_theme = "furo"
 
 myst_enable_extensions = [
     "colon_fence",
+    "dollarmath",
+    "amsmath",
 ]
 
 intersphinx_mapping = {
