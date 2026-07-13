@@ -32,11 +32,11 @@ pipeline was implemented in `kwneuro`, a Python library for dMRI analysis.
 
 Persistent, distressing psychotic-like experiences (PLEs) in adolescence are
 associated with elevated risk for later psychotic disorder, depression, and
-functional impairment (Karcher, Nicole R., et al, 2022). Karcher et al. (2023)
-applied latent class growth analysis to ABCD Study data and identified five PLE
-trajectory classes. This study contrasts **Group 1 (persistent-distressing)**
-and **Group 5 (low-distressing / normative)**, to detect neurobiological
-correlates of early psychotic risk.
+functional impairment[^karcher2022]. Karcher et al.[^karcher2023] applied latent
+class growth analysis to ABCD Study data and identified five PLE trajectory
+classes. This study contrasts **Group 1 (persistent-distressing)** and **Group 5
+(low-distressing / normative)**, to detect neurobiological correlates of early
+psychotic risk.
 
 This tutorial demonstrates a pipeline for identifying which white matter
 microstructural metrics differ between adolescents on the persistent-distressing
@@ -47,7 +47,7 @@ youth with persistent distressing psychotic-like experiences (PLEs) exhibit
 cortical and subcortical patterns resembling those seen in adult schizophrenia
 spectrum and Alzheimer disease samples. Building on these findings, we sought to
 examine whether diffusion MRI would reveal analogous microstructural
-alterations, as indexed by DTI and NODDI metrics (Karcher et al. (2023)).
+alterations, as indexed by DTI and NODDI metrics[^karcher2023].
 
 Five dMRI metrics are derived from two biophysical models.
 
@@ -98,9 +98,10 @@ change.
 
 ### 3.1 Preprocessing and Microstructure Estimation
 
-Denoising (Patch2Self), brain extraction (HD-BET), and microstructure estimation
-(DTI + NODDI) are run per subject. The `Cache` context manager handles
-checkpointing so the batch loop is safely restartable.
+Denoising (Patch2Self)[^fadnavis2020], brain extraction (HD-BET)[^isensee2019],
+and microstructure estimation (DTI + NODDI)[^zhang2012][^daducci2015] are run
+per subject. The `Cache` context manager handles checkpointing so the batch loop
+is safely restartable.
 
 ```python
 # Illustrative — requires access to raw DWI data
@@ -160,8 +161,8 @@ two from each group — all at the same axial slice.
 A balanced subset of **25 subjects per group** (50 total) was selected with a
 fixed random seed to ensure neither group dominates the template geometry. The
 template is built jointly from FA and mean b=0 using iterative groupwise
-registration (ANTs), capturing both white matter structure and cortical
-boundaries.
+registration (ANTs)[^avants2008], capturing both white matter structure and
+cortical boundaries.
 
 ```python
 # Illustrative — requires per-subject metric maps
@@ -247,11 +248,10 @@ used as the search volume for ComBat and the voxelwise GLM.
 
 ### 3.5 Scanner Harmonisation
 
-ComBat (Johnson et al., 2007; Fortin et al., 2017) is applied independently per
-metric, removing site-specific additive and multiplicative effects while
-preserving variance attributable to age, sex, income, and group. §4 specifies
-the voxelwise GLM used to test for group differences in the harmonised metric
-maps.
+ComBat[^johnson2007][^fortin2017] is applied independently per metric, removing
+site-specific additive and multiplicative effects while preserving variance
+attributable to age, sex, income, and group. §4 specifies the voxelwise GLM used
+to test for group differences in the harmonised metric maps.
 
 ```python
 # Illustrative — requires warped metric volumes in template space
@@ -321,9 +321,8 @@ and FWF for all 506 subjects. As shown in §3.5, ComBat harmonisation removes th
 site-level offsets visible in the raw metric distributions, confirming that
 scanner effects are adequately controlled before any group-level comparison.
 
-**Planned statistical analysis.** With harmonised metric maps in hand, group
-differences can be identified by testing all five metrics voxelwise within the
-white matter mask (§3.4):
+**Planned statistical analysis.** Group differences can be identified by testing
+all five metrics voxelwise within the white matter mask (§3.4):
 
 $$\text{metric} \sim \beta_0 + \beta_1 \cdot \text{group} + \beta_2 \cdot \text{age} + \beta_3 \cdot \text{sex} + \beta_4 \cdot \text{income}$$
 
@@ -338,24 +337,41 @@ subcortical patterns previously reported with structural MRI.
 
 ## References
 
-- Karcher, Nicole R., et al. (2022). Persistent and distressing psychotic-like
-  experiences using adolescent brain cognitive development study data.
-  _Molecular psychiatry_ 27(3), 1490-1501.
-- Karcher, N.R. et al. (2023). Trajectories of psychotic-like experiences and
-  associations with outcomes in the ABCD Study. _JAMA Psychiatry_.
-- Avants, B.B. et al. (2008). Symmetric diffeomorphic image registration with
-  cross-correlation. _Medical Image Analysis_, 12(1), 26–41.
-- Daducci, A. et al. (2015). AMICO: Accelerated microstructure imaging via
-  convex optimization. _NeuroImage_, 105, 32–44.
-- Fadnavis, S. et al. (2020). Patch2Self: Denoising diffusion MRI with
-  self-supervised learning. _NeurIPS_, 33.
-- Fortin, J.P. et al. (2017). Harmonization of multi-site diffusion tensor
-  imaging data. _NeuroImage_, 161, 149–170.
-- Isensee, F. et al. (2019). Automated brain extraction of multi-sequence MRI
-  using artificial neural networks. _Human Brain Mapping_, 40(17), 4952–4964.
-- Johnson, W.E., Li, C., & Rabinovic, A. (2007). Adjusting batch effects in
-  microarray expression data using empirical Bayes methods. _Biostatistics_,
-  8(1), 118–127.
-- Zhang, H. et al. (2012). NODDI: Practical in vivo neurite orientation
-  dispersion and density imaging of the human brain. _NeuroImage_, 61(4),
-  1000–1016.
+[^avants2008]:
+    Avants, B.B. et al. (2008). Symmetric diffeomorphic image registration with
+    cross-correlation. _Medical Image Analysis_, 12(1), 26–41.
+
+[^daducci2015]:
+    Daducci, A. et al. (2015). AMICO: Accelerated microstructure imaging via
+    convex optimization. _NeuroImage_, 105, 32–44.
+
+[^fadnavis2020]:
+    Fadnavis, S. et al. (2020). Patch2Self: Denoising diffusion MRI with
+    self-supervised learning. _NeurIPS_, 33.
+
+[^fortin2017]:
+    Fortin, J.P. et al. (2017). Harmonization of multi-site diffusion tensor
+    imaging data. _NeuroImage_, 161, 149–170.
+
+[^isensee2019]:
+    Isensee, F. et al. (2019). Automated brain extraction of multi-sequence MRI
+    using artificial neural networks. _Human Brain Mapping_, 40(17), 4952–4964.
+
+[^johnson2007]:
+    Johnson, W.E., Li, C., & Rabinovic, A. (2007). Adjusting batch effects in
+    microarray expression data using empirical Bayes methods. _Biostatistics_,
+    8(1), 118–127.
+
+[^karcher2022]:
+    Karcher, Nicole R., et al. (2022). Persistent and distressing psychotic-like
+    experiences using adolescent brain cognitive development study data.
+    _Molecular psychiatry_ 27(3), 1490-1501.
+
+[^karcher2023]:
+    Karcher, N.R. et al. (2023). Trajectories of psychotic-like experiences and
+    associations with outcomes in the ABCD Study. _JAMA Psychiatry_.
+
+[^zhang2012]:
+    Zhang, H. et al. (2012). NODDI: Practical in vivo neurite orientation
+    dispersion and density imaging of the human brain. _NeuroImage_, 61(4),
+    1000–1016.
