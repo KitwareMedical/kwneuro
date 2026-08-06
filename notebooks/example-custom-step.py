@@ -6,7 +6,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.19.1
+#       jupytext_version: 1.19.5
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -14,12 +14,13 @@
 # ---
 
 # %% [markdown]
-# # Add a Custom Step to a kwneuro Pipeline
+# # Add a custom step to a kwneuro pipeline
 #
-# This notebook is for projects that use `kwneuro` as the main pipeline driver
-# and need to add a project-specific step without changing `kwneuro` itself.
-# The step accepts a `VolumeResource`, returns an `InMemoryVolumeResource`, and
-# can use the same `Cache` context as built-in pipeline stages.
+# Suppose you have a project that primarily uses `kwneuro` for its pipeline, but you want to add a step that isn't provided by `kwneuro`.
+#
+# You could of course add it to `kwneuro`, but it is also not hard to incorporate custom algorithms into your pipeline without changing `kwneuro`.
+#
+# This notebook is a demo showing some approaches to doing that.
 
 # %% [markdown]
 # ## Create a synthetic volume
@@ -59,7 +60,7 @@ print(f"Input shape: {volume.get_array().shape}")
 # %% [markdown]
 # ## Define a custom step
 #
-# The function below is deliberately small: it loads the resource once,
+# The function below is a small example for demo purposes: it loads the resource once,
 # computes a binary high-intensity mask, then preserves spatial metadata using
 # `update_volume_metadata()`.
 
@@ -93,10 +94,7 @@ CALL_COUNT = 0
 # %% [markdown]
 # ## Use the pipeline cache
 #
-# Outside a `Cache` context, `@cacheable` has no effect. Inside a context, the
-# first call writes the result to disk, and later calls with the same inputs
-# load the saved output. `Cache.status()` reports the number of complete
-# argument entries for each step.
+# Inside a `Cache` context the `@cacheable` decoration makes the custom function write to disk on the first call, and then read from disk on subsequent calls (with the same arguments). This is how `kwneuro` functions are internally made to be cacheable.
 
 # %%
 tmpdir = TemporaryDirectory()
@@ -144,18 +142,19 @@ print(
 # ## Interoperate with file-based external tools
 #
 # Some tools only accept filesystem paths. `kwneuro.external` provides temporary
-# file helpers for those boundaries: write a fresh copy, call the external tool
+# file helpers for those: write a fresh copy, call the external tool
 # while the context is open, then explicitly re-enter `kwneuro` with the file
 # helpers.
 
 # %%
+# Pretend this is an external file-based tool you are trying to use
 def external_threshold_tool(input_path: Path, output_path: Path) -> None:
     image = nib.load(input_path)
     data = image.get_fdata()
     thresholded = (data > data.mean()).astype(np.uint8)
     nib.save(nib.Nifti1Image(thresholded, image.affine, image.header), output_path)
 
-
+# Use kwneuro.external.temporary_volume_file to create a temporary file on which to operate
 with temporary_volume_file(volume) as input_path:
     external_output_path = input_path.with_name("external_mask.nii.gz")
     external_threshold_tool(input_path, external_output_path)

@@ -1,9 +1,7 @@
-# Use One kwneuro Step in an Existing Workflow
+# Use kwneuro in an existing file-based workflow
 
 This notebook is for projects that already have their own file-based workflow
 and want to call one `kwneuro` step without adopting a full `kwneuro` pipeline.
-It uses tiny synthetic data so it can run anywhere without downloads or
-optional pipeline dependencies.
 
 ## Create a small FSL-style DWI input
 
@@ -74,15 +72,14 @@ write_dwi_fsl(make_synthetic_dwi(), input_dwi_path)
 print(f"Wrote example inputs under {work_dir}")
 ```
 
-    Wrote example inputs under /tmp/tmpy92tq859
+    Wrote example inputs under /tmp/tmp7ob2iiwb
 
 
 ## Read the files and fit DTI
 
-`kwneuro.files` is a convenience boundary for quick file-first workflows:
+`kwneuro.files` is provides convenient utilities for quick file-first workflows:
 it builds the same lazy resource objects used by the rest of `kwneuro`, but
-keeps the call site focused on paths. The resource model remains the core API
-for reusable or custom pipelines.
+keeps the function calls focused on file paths.
 
 
 ```python

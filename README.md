@@ -32,8 +32,6 @@ CSD, brain masks, T1 bias correction, tissue segmentation, parcellation,
 registration, template building, harmonization, and cached reruns of expensive
 work.
 
-## What kwneuro is for
-
 kwneuro is designed for workflows that:
 
 - fit diffusion microstructure models and write scalar maps such as FA, MD, NDI,
@@ -153,7 +151,7 @@ kwneuro registration dwi-to-structural \
   --out-transform output/dwi_to_t1_transform
 ```
 
-## What's included
+## Feature sets
 
 | Area            | Capability                                             | Powered by  | Install       |
 | --------------- | ------------------------------------------------------ | ----------- | ------------- |

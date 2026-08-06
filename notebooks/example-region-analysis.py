@@ -6,9 +6,9 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.19.1
+#       jupytext_version: 1.19.5
 #   kernelspec:
-#     display_name: abcd
+#     display_name: Python 3 (ipykernel)
 #     language: python
 #     name: python3
 # ---
@@ -17,20 +17,7 @@
 # # Regional Analysis with T1 and DWI Data
 #
 # This notebook demonstrates how to combine structural (T1) and diffusion (DWI) MRI
-# using `kwneuro` to perform brain region-level microstructure analysis. We use a
-# dataset from openneuro, which includes a T1 and a single-shell DWI
-# acquisition
-#
-# ## Pipeline overview
-#
-# 0. Download example data
-# 1. Load DWI and T1 data
-# 2. T1 bias correction
-# 3. T1 brain extraction and tissue segmentation (Atropos vs Deep Atropos)
-# 4. Cortical parcellation (DKT atlas via ANTsPyNet)
-# 5. DWI preprocessing: denoising, brain extraction, and DTI estimation
-# 6. Register DWI to T1 space (rigid body)
-# 7. Warp parcellation labels into DWI space
+# using `kwneuro` to perform brain region-level microstructure analysis.
 
 # %% [markdown] tags=["remove-cell"]
 # ### Spatial subsampling
@@ -42,7 +29,7 @@ SUBSAMPLE = False
 SUBSAMPLE_FACTOR = 2
 
 # %% [markdown]
-# ## 0. Download example data
+# ## Download example data
 #
 # We download one subject from the MPI-Leipzig Mind-Brain-Body dataset ([OpenNeuro ds000221](https://openneuro.org/datasets/ds000221)). This dataset contains 64-direction single-shell DWI data (b ~ 1000 s/mm²) and a T1-weighted structural image.
 #
@@ -79,7 +66,7 @@ print(f"DWI dir:      {dwi_dir}")
 print(f"DWI basename: {basename}")
 
 # %% [markdown]
-# ## 1. Load T1 data
+# ## Load T1 data
 #
 # The T1-weighted structural image provides the anatomical reference for tissue
 # segmentation, cortical parcellation, and DWI co-registration.
@@ -104,7 +91,7 @@ if SUBSAMPLE:
 
 struct_image = structural.volume.get_array()
 t1_mid = struct_image.shape[2] // 2
-t1_slice = 170
+t1_slice = 170 // SUBSAMPLE_FACTOR if SUBSAMPLE else 170
 
 print(f"T1 shape: {struct_image.shape}")
 
@@ -183,13 +170,13 @@ plt.tight_layout()
 plt.show()
 
 # %% [markdown]
-# ## 3. Brain extraction and tissue segmentation
+# ## Brain extraction and tissue segmentation
 #
 # We extract a brain mask from the bias-corrected T1 using HD-BET, then compare
 # two tissue segmentation methods:
 #
-# - **Atropos** *(default)*: classical ANTsPy k-means, 3 classes — CSF (1), GM (2), WM (3).
-# - **Deep Atropos**: deep-learning segmentation via ANTsPyNet, 6 classes — CSF (1),
+# - **Atropos** *(default)*: classical ANTsPy k-means, 3 classes: CSF (1), GM (2), WM (3).
+# - **Deep Atropos**: deep-learning segmentation via ANTsPyNet, 6 classes: CSF (1),
 #   GM (2), WM (3), deep GM (4), cerebellum (5), brainstem (6).
 #   Requires `pip install kwneuro[antspynet]`.
 
@@ -267,7 +254,7 @@ tf.keras.backend.clear_session()
 gc.collect()
 
 # %% [markdown]
-# ## 4. Cortical parcellation (DKT atlas)
+# ## Cortical parcellation (DKT atlas)
 #
 # `parcellate(method="dkt")` applies the Desikan-Killiany-Tourville (DKT) cortical
 # labeling via ANTsPyNet. A deep learning model assigns each cortical voxel to one of
@@ -315,7 +302,7 @@ tf.keras.backend.clear_session()
 gc.collect()
 
 # %% [markdown]
-# ## 5. DWI preprocessing
+# ## DWI preprocessing
 #
 # Three steps prepare the DWI for registration and DTI estimation: Patch2Self
 # denoising, HD-BET brain extraction, and DIPY TensorModel fitting.
@@ -364,11 +351,11 @@ plt.tight_layout()
 plt.show()
 
 # %% [markdown]
-# ## 6. Register DWI to T1 space (rigid body)
+# ## Register DWI to T1 space (rigid body)
 #
 # A rigid-body transform aligns the mean b=0 image to the T1.
 # A rigid transform is appropriate here because the DWI and T1 were
-# acquired in the same session — we only need to correct for minor inter-sequence
+# acquired in the same session, so we only need to correct for minor inter-sequence
 # head motion.
 
 # %% tags=["remove-output"]
@@ -402,7 +389,7 @@ plt.tight_layout()
 plt.show()
 
 # %% [markdown]
-# ## 7. Warp labels into DWI space
+# ## Warp labels into DWI space
 #
 # To analyse DTI values per brain region we need the parcel labels in the same
 # space as the DTI maps. We apply the *inverse* of the DWI→T1 transform to warp
