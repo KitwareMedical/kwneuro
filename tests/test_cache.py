@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -26,6 +27,24 @@ from kwneuro.resource import (
     InMemoryResponseFunctionResource,
     InMemoryVolumeResource,
 )
+
+
+@dataclass
+class _CacheableText:
+    """Minimal result type for exercising bare @cacheable behavior."""
+
+    value: str
+
+    @classmethod
+    def _cache_files(cls, step_name: str) -> list[str]:
+        return [f"{step_name}.txt"]
+
+    def _cache_save(self, cache_dir: Path, step_name: str) -> None:
+        (cache_dir / f"{step_name}.txt").write_text(self.value)
+
+    @classmethod
+    def _cache_load(cls, cache_dir: Path, step_name: str) -> _CacheableText:
+        return cls((cache_dir / f"{step_name}.txt").read_text())
 
 
 @pytest.fixture
@@ -248,6 +267,54 @@ def test_cacheable_no_op_outside_context(dwi3: Dwi) -> None:
     """@cacheable is a transparent pass-through when no Cache context is active."""
     dti = dwi3.estimate_dti()
     assert isinstance(dti, Dti)
+
+
+def test_cacheable_reuses_all_argument_variants(tmp_path: Path) -> None:
+    """Results for multiple inputs remain cached across Cache contexts."""
+    calls: list[int] = []
+
+    @cacheable  # type: ignore[untyped-decorator]
+    def fn(value: int) -> _CacheableText:
+        calls.append(value)
+        return _CacheableText(str(value))
+
+    with Cache(tmp_path):
+        assert fn(1).value == "1"
+        assert fn(2).value == "2"
+
+    with Cache(tmp_path):
+        assert fn(1).value == "1"
+        assert fn(2).value == "2"
+
+    assert calls == [1, 2]
+
+
+def test_cacheable_reuses_earlier_argument_variant_with_cache_spec(
+    tmp_path: Path,
+) -> None:
+    """Calling A after caching A and B reuses A's cached result."""
+    calls: list[int] = []
+
+    def _save(result: str, cache_dir: Path) -> None:
+        (cache_dir / "out.txt").write_text(result)
+
+    @cacheable(  # type: ignore[untyped-decorator]
+        CacheSpec(
+            files=["out.txt"],
+            save=_save,
+            load=lambda cache_dir: (cache_dir / "out.txt").read_text(),
+        )
+    )
+    def fn(value: int) -> str:
+        calls.append(value)
+        return str(value)
+
+    with Cache(tmp_path):
+        assert fn(1) == "1"  # A: miss
+        assert fn(2) == "2"  # B: miss
+        assert fn(1) == "1"  # A: hit
+
+    assert calls == [1, 2]
 
 
 # ---------------------------------------------------------------------------
