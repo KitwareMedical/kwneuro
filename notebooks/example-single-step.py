@@ -6,7 +6,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.19.1
+#       jupytext_version: 1.19.5
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -14,12 +14,10 @@
 # ---
 
 # %% [markdown]
-# # Use One kwneuro Step in an Existing Workflow
+# # Use kwneuro in an existing file-based workflow
 #
 # This notebook is for projects that already have their own file-based workflow
 # and want to call one `kwneuro` step without adopting a full `kwneuro` pipeline.
-# It uses tiny synthetic data so it can run anywhere without downloads or
-# optional pipeline dependencies.
 
 # %% [markdown]
 # ## Create a small FSL-style DWI input
@@ -92,10 +90,9 @@ print(f"Wrote example inputs under {work_dir}")
 # %% [markdown]
 # ## Read the files and fit DTI
 #
-# `kwneuro.files` is a convenience boundary for quick file-first workflows:
+# `kwneuro.files` is provides convenient utilities for quick file-first workflows:
 # it builds the same lazy resource objects used by the rest of `kwneuro`, but
-# keeps the call site focused on paths. The resource model remains the core API
-# for reusable or custom pipelines.
+# keeps the function calls focused on file paths.
 
 # %%
 dwi = read_dwi_fsl(input_dwi_path)
