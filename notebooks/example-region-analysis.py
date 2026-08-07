@@ -96,7 +96,7 @@ t1_slice = 170 // SUBSAMPLE_FACTOR if SUBSAMPLE else 170
 print(f"T1 shape: {struct_image.shape}")
 
 # %% [markdown]
-# ## 2. T1 bias correction
+# ## T1 bias correction
 #
 # RF field inhomogeneities create smooth intensity gradients across the T1 that
 # can bias tissue segmentation and parcellation. `correct_bias()` applies ANTsPy's

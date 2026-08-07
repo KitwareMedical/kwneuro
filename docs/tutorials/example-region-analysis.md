@@ -75,7 +75,7 @@ print(f"T1 shape: {struct_image.shape}")
     T1 shape: (176, 240, 256)
     
 
-## 2. T1 bias correction
+## T1 bias correction
 
 RF field inhomogeneities create smooth intensity gradients across the T1 that
 can bias tissue segmentation and parcellation. `correct_bias()` applies ANTsPy's
