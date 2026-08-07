@@ -155,7 +155,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-    Mask shape: (128, 128, 60), voxels in brain: 174687.0
+    Mask shape: (128, 128, 60), voxels in brain: 174771.0
 
 
 
@@ -403,14 +403,17 @@ print(f"Results saved to {output_dir.resolve()}")
 Wrapping pipeline steps in a `Cache` context manager enables automatic
 disk-based caching. Key behaviours:
 
-- **First run:** results are computed and saved to `cache_dir`.
-- **Subsequent runs:** results are loaded from disk, skipping the computation.
+- **First run:** results are computed and saved under
+  `cache_dir/<step_name>/<argument-digest>/`.
+- **Subsequent runs:** the same argument combination is loaded from disk,
+  skipping the computation.
 - **Scalar parameters** (`int`, `float`, `str`, `bool`) are stored as
-  human-readable JSON and fingerprinted — changing a value invalidates that
-  step's cache.
+  human-readable JSON and fingerprinted — changing a value creates another
+  cache entry without replacing the earlier one.
 - **Input data** (volumes, b-values, b-vectors, masks, response functions) are
-  sha256-fingerprinted — if the underlying data changes, the cache is
-  invalidated automatically.
+  sha256-fingerprinted — different input content gets a separate cache entry.
+- **Cache status:** `Cache.status()` reports how many complete argument
+  entries are available for each step.
 - **Forced recomputation:** pass `force={"step_name"}` or `force=True` to
   rerun a specific step or all steps regardless of cache state.
 
@@ -432,53 +435,41 @@ with Cache(cache_dir) as pc:
 ```python
 status = pc.status([Dti.estimate_dti, Noddi.estimate_noddi, compute_csd_peaks])
 print("Cache status:")
-for step, is_cached in status.items():
-    print(f"  {step}: {'cached' if is_cached else 'not cached'}")
+for step, entry_count in status.items():
+    print(f"  {step}: {entry_count} cached argument set(s)")
 ```
 
     Cache status:
-      Dti.estimate_dti: cached
-      Noddi.estimate_noddi: cached
-      compute_csd_peaks: cached
+      Dti.estimate_dti: 1 cached argument set(s)
+      Noddi.estimate_noddi: 1 cached argument set(s)
+      compute_csd_peaks: 1 cached argument set(s)
 
 
-Quick look at the `.params.json` file saved alongside each cached step.
-The sidecar has two sections:
+Each step directory contains one subdirectory per argument digest. The
+`.params.json` saved inside an entry records the cache format version
+plus two human-inspectable argument sections:
 
 - `scalars` — scalar parameters stored as human-readable JSON, so you can
   inspect exactly what values were used to produce the cached result.
 - `hashes` — sha256 fingerprints of non-scalar inputs (DWI volume,
   b-values, b-vectors, mask, response function, etc.). If the underlying data
-  changes between runs, the hash changes and the cache is invalidated.
+  changes between runs, it maps to another cache entry.
 
 
 ```python
 import json
 
-print("Files in cache_dir:")
-for f in sorted(cache_dir.iterdir()):
-    print(f"  {f.name}")
+step_dir = cache_dir / "estimate_dti"
+entry_dir = next(path for path in sorted(step_dir.iterdir()) if path.is_dir())
 
-print("\nestimate_dti.params.json:")
-sidecar = json.loads((cache_dir / "estimate_dti.params.json").read_text())
-print(json.dumps(sidecar, indent=2))
+print("Files for one estimate_dti argument set:")
+print(f"  {step_dir.name}/")
+print(f"    {entry_dir.name}/")
+for path in sorted(entry_dir.iterdir()):
+    print(f"      {path.name}")
+
+params_path = entry_dir / "estimate_dti.params.json"
+print(f"\n{params_path.relative_to(cache_dir)}:")
+params = json.loads(params_path.read_text())
+print(json.dumps(params, indent=2))
 ```
-
-    Files in cache_dir:
-      compute_csd_peaks.params.json
-      csd_peak_dirs.nii.gz
-      csd_peak_values.nii.gz
-      estimate_dti.nii.gz
-      estimate_dti.params.json
-      estimate_noddi.nii.gz
-      estimate_noddi.params.json
-      estimate_noddi_directions.nii.gz
-    
-    estimate_dti.params.json:
-    {
-      "hashes": {
-        "dwi": "a0b14d69557b8bdba79063cd935673b8c114ffaf1c3756b87c2c930d905abc6a",
-        "mask": "454054019b2fb1265fbeca5db8fb65b1701390a75d443c974e4f9896f8a71953"
-      }
-    }
-

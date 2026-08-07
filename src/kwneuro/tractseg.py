@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
-from kwneuro.cache import _active_cache, _compute_fingerprint, _save_params
+from kwneuro.cache import cacheable
 from kwneuro.csd import combine_csd_peaks_to_vector_volume, compute_csd_peaks
-from kwneuro.io import NiftiVolumeResource
 from kwneuro.resource import ResponseFunctionResource, VolumeResource
 from kwneuro.util import create_estimate_volume_resource
 
@@ -28,6 +27,7 @@ def _call_tractseg(data: np.ndarray, output_type: str) -> np.ndarray:
     return run_tractseg(data=data, output_type=output_type)
 
 
+@cacheable
 def extract_tractseg(
     dwi: Dwi,
     mask: VolumeResource,
@@ -56,28 +56,6 @@ def extract_tractseg(
         for endings_segmentation:   [x, y, z, 2*nr_of_bundles]
         for TOM:                    [x, y, z, 3*nr_of_bundles]
     """
-    # Inline cache check — uses a dynamic filename so a decorator cannot be used.
-    _cache = _active_cache.get()
-    _cache_file = f"tractseg_{output_type}.nii.gz"
-    _scalars: dict[str, Any] | None = None
-    _hashes: dict[str, str] | None = None
-    if _cache is not None:
-        _scalars = {"output_type": output_type}
-        h: dict[str, str] = {}
-        for name, val in [
-            ("dwi", dwi),
-            ("mask", mask),
-            ("response", response),
-            ("csd_peaks", csd_peaks),
-        ]:
-            fp = _compute_fingerprint(val)
-            if fp is not None:
-                h[name] = fp
-        _hashes = h or None
-        if _cache.is_cached("extract_tractseg", [_cache_file], _scalars, _hashes):
-            logging.info("extract_tractseg: cache hit (%s)", output_type)
-            return NiftiVolumeResource(_cache.cache_dir / _cache_file)
-
     if csd_peaks is None:
         # Compute CSD peaks (MRtrix3 convention: 3 peaks).
         # compute_csd_peaks is @cacheable, so it uses _cache automatically.
@@ -97,15 +75,8 @@ def extract_tractseg(
         data=csd_peaks_vector.get_array(), output_type=output_type
     )
 
-    result = create_estimate_volume_resource(
+    return create_estimate_volume_resource(
         array=segmentation,
         reference_volume=dwi.volume,
         intent_name="TRACTSEG",
     )
-
-    if _cache is not None:
-        logging.info("extract_tractseg: saving cache (%s)", output_type)
-        _save_params(_cache.cache_dir, "extract_tractseg", _scalars, _hashes)
-        return NiftiVolumeResource.save(result, _cache.cache_dir / _cache_file)
-
-    return result

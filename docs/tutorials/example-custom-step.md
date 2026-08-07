@@ -86,7 +86,8 @@ CALL_COUNT = 0
 
 Outside a `Cache` context, `@cacheable` has no effect. Inside a context, the
 first call writes the result to disk, and later calls with the same inputs
-load the saved output.
+load the saved output. `Cache.status()` reports the number of complete
+argument entries for each step.
 
 
 ```python
@@ -111,27 +112,40 @@ with Cache(cache_dir, force={"high_intensity_mask"}):
 print(f"Executions after forced recompute: {CALL_COUNT}")
 ```
 
-    {'high_intensity_mask': True}
+    {'high_intensity_mask': 1}
     Executions after first cached call: 1
     Executions after cache hit: 1
     Cached output matches: True
     Executions after forced recompute: 2
 
 
-Changing a scalar parameter also changes the cache fingerprint, so the next
-call recomputes and stores a new result.
+Changing a scalar parameter creates another cache entry. The result for the
+original argument combination remains available.
 
 
 ```python
-with Cache(cache_dir):
+with Cache(cache_dir) as cache:
     lower_threshold_mask = high_intensity_mask(volume, threshold=0.4)
+    print(cache.status([high_intensity_mask]))
 
 print(f"Executions after parameter change: {CALL_COUNT}")
 print(f"Lower-threshold voxels: {int(lower_threshold_mask.get_array().sum())}")
+
+with Cache(cache_dir):
+    original_threshold_mask = high_intensity_mask(volume, threshold=0.6)
+
+print(f"Executions after reusing original arguments: {CALL_COUNT}")
+print(
+    "Original entry still matches: "
+    f"{np.array_equal(mask_1.get_array(), original_threshold_mask.get_array())}"
+)
 ```
 
+    {'high_intensity_mask': 2}
     Executions after parameter change: 3
     Lower-threshold voxels: 149
+    Executions after reusing original arguments: 3
+    Original entry still matches: True
 
 
 ## Interoperate with file-based external tools

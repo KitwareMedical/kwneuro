@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -15,6 +14,7 @@ from kwneuro.cache import (
     CacheSpec,
     _active_cache,
     _compute_fingerprint,
+    _save_params,
     cacheable,
 )
 from kwneuro.csd import compute_csd_peaks
@@ -29,22 +29,34 @@ from kwneuro.resource import (
 )
 
 
-@dataclass
-class _CacheableText:
-    """Minimal result type for exercising bare @cacheable behavior."""
+def _write_cache_entry(
+    cache: Cache,
+    step_name: str,
+    files: list[str],
+    scalars: dict[str, object] | None = None,
+    hashes: dict[str, str] | None = None,
+    *,
+    write_params: bool = True,
+) -> Path:
+    """Create a cache entry for direct Cache.is_cached tests."""
+    entry_dir = cache._entry_dir(step_name, scalars, hashes)
+    entry_dir.mkdir(parents=True)
+    for filename in files:
+        path = entry_dir / filename
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("result")
+    if write_params:
+        _save_params(entry_dir, step_name, scalars, hashes)
+    return entry_dir
 
-    value: str
 
-    @classmethod
-    def _cache_files(cls, step_name: str) -> list[str]:
-        return [f"{step_name}.txt"]
-
-    def _cache_save(self, cache_dir: Path, step_name: str) -> None:
-        (cache_dir / f"{step_name}.txt").write_text(self.value)
-
-    @classmethod
-    def _cache_load(cls, cache_dir: Path, step_name: str) -> _CacheableText:
-        return cls((cache_dir / f"{step_name}.txt").read_text())
+def _only_cache_entry(cache_dir: Path, step_name: str) -> Path:
+    """Return the only keyed entry for a test step."""
+    entries = [path for path in (cache_dir / step_name).iterdir() if path.is_dir()]
+    assert len(entries) == 1
+    assert len(entries[0].name) == 64
+    int(entries[0].name, 16)
+    return entries[0]
 
 
 @pytest.fixture
@@ -135,57 +147,82 @@ def test_is_cached_missing_file(tmp_path: Path) -> None:
 
 
 def test_is_cached_all_files_present(tmp_path: Path) -> None:
-    (tmp_path / "out.txt").write_text("x")
     pc = Cache(tmp_path, force=False)
+    _write_cache_entry(pc, "step", ["out.txt"])
     assert pc.is_cached("step", ["out.txt"])
 
 
 def test_is_cached_forced_overrides_present(tmp_path: Path) -> None:
-    (tmp_path / "out.txt").write_text("x")
+    _write_cache_entry(Cache(tmp_path), "step", ["out.txt"])
     pc = Cache(tmp_path, force=True)
     assert not pc.is_cached("step", ["out.txt"])
 
 
 def test_is_cached_scalars_match(tmp_path: Path) -> None:
-    (tmp_path / "out.txt").write_text("x")
-    (tmp_path / "step.params.json").write_text(
-        json.dumps({"scalars": {"x": 1}}, sort_keys=True)
-    )
     pc = Cache(tmp_path)
+    _write_cache_entry(pc, "step", ["out.txt"], scalars={"x": 1})
     assert pc.is_cached("step", ["out.txt"], scalars={"x": 1})
 
 
 def test_is_cached_scalars_mismatch(tmp_path: Path) -> None:
-    (tmp_path / "out.txt").write_text("x")
-    (tmp_path / "step.params.json").write_text(
-        json.dumps({"scalars": {"x": 1}}, sort_keys=True)
-    )
     pc = Cache(tmp_path)
+    _write_cache_entry(pc, "step", ["out.txt"], scalars={"x": 1})
     assert not pc.is_cached("step", ["out.txt"], scalars={"x": 99})
 
 
 def test_is_cached_params_file_missing_is_miss(tmp_path: Path) -> None:
-    (tmp_path / "out.txt").write_text("x")
     pc = Cache(tmp_path)
+    _write_cache_entry(
+        pc,
+        "step",
+        ["out.txt"],
+        scalars={"x": 1},
+        write_params=False,
+    )
     assert not pc.is_cached("step", ["out.txt"], scalars={"x": 1})
 
 
 def test_is_cached_hashes_match(tmp_path: Path) -> None:
-    (tmp_path / "out.txt").write_text("x")
-    (tmp_path / "step.params.json").write_text(
-        json.dumps({"hashes": {"arr": "abc123"}}, sort_keys=True)
-    )
     pc = Cache(tmp_path)
+    _write_cache_entry(pc, "step", ["out.txt"], hashes={"arr": "abc123"})
     assert pc.is_cached("step", ["out.txt"], hashes={"arr": "abc123"})
 
 
 def test_is_cached_hashes_mismatch(tmp_path: Path) -> None:
-    (tmp_path / "out.txt").write_text("x")
-    (tmp_path / "step.params.json").write_text(
-        json.dumps({"hashes": {"arr": "abc123"}}, sort_keys=True)
-    )
     pc = Cache(tmp_path)
+    _write_cache_entry(pc, "step", ["out.txt"], hashes={"arr": "abc123"})
     assert not pc.is_cached("step", ["out.txt"], hashes={"arr": "different"})
+
+
+def test_legacy_flat_entry_is_recomputed_once(tmp_path: Path) -> None:
+    """A legacy entry is left untouched while a reusable keyed entry is created."""
+    (tmp_path / "out.txt").write_text("legacy")
+    (tmp_path / "fn.params.json").write_text(
+        json.dumps({"scalars": {"value": 1}}), encoding="utf-8"
+    )
+    calls: list[int] = []
+
+    def _save(result: str, cache_dir: Path) -> None:
+        (cache_dir / "out.txt").write_text(result)
+
+    @cacheable(  # type: ignore[untyped-decorator]
+        CacheSpec(
+            files=["out.txt"],
+            save=_save,
+            load=lambda cache_dir: (cache_dir / "out.txt").read_text(),
+        )
+    )
+    def fn(value: int) -> str:
+        calls.append(value)
+        return f"new-{value}"
+
+    with Cache(tmp_path) as cache:
+        assert fn(1) == "new-1"
+        assert fn(1) == "new-1"
+
+    assert calls == [1]
+    assert (tmp_path / "out.txt").read_text() == "legacy"
+    assert cache.status([fn])[fn.__qualname__] == 1
 
 
 # ---------------------------------------------------------------------------
@@ -272,21 +309,28 @@ def test_cacheable_no_op_outside_context(dwi3: Dwi) -> None:
 def test_cacheable_reuses_all_argument_variants(tmp_path: Path) -> None:
     """Results for multiple inputs remain cached across Cache contexts."""
     calls: list[int] = []
+    array_a = np.ones((2, 2, 2), dtype=np.float32)
+    array_b = np.full((2, 2, 2), 2, dtype=np.float32)
 
-    @cacheable  # type: ignore[untyped-decorator]
-    def fn(value: int) -> _CacheableText:
-        calls.append(value)
-        return _CacheableText(str(value))
-
-    with Cache(tmp_path):
-        assert fn(1).value == "1"
-        assert fn(2).value == "2"
+    @cacheable
+    def fn(array: np.ndarray) -> InMemoryVolumeResource:
+        calls.append(int(array[0, 0, 0]))
+        return InMemoryVolumeResource(array=array.copy(), affine=np.eye(4))
 
     with Cache(tmp_path):
-        assert fn(1).value == "1"
-        assert fn(2).value == "2"
+        result_a = fn(array_a)
+        result_b = fn(array_b)
+
+    # Cached results are lazy disk resources, so their paths must remain independent.
+    assert np.array_equal(result_a.get_array(), array_a)
+    assert np.array_equal(result_b.get_array(), array_b)
+
+    with Cache(tmp_path):
+        assert np.array_equal(fn(array_a).get_array(), array_a)
+        assert np.array_equal(fn(array_b).get_array(), array_b)
 
     assert calls == [1, 2]
+    assert Cache(tmp_path).status([fn])[fn.__qualname__] == 2
 
 
 def test_cacheable_reuses_earlier_argument_variant_with_cache_spec(
@@ -317,23 +361,85 @@ def test_cacheable_reuses_earlier_argument_variant_with_cache_spec(
     assert calls == [1, 2]
 
 
+def test_cacheable_equivalent_call_syntax_reuses_entry(tmp_path: Path) -> None:
+    """Positional, keyword, and explicit-default calls share one cache entry."""
+    calls: list[tuple[int, int]] = []
+
+    def _save(result: str, cache_dir: Path) -> None:
+        (cache_dir / "out.txt").write_text(result)
+
+    @cacheable(  # type: ignore[untyped-decorator]
+        CacheSpec(
+            files=["out.txt"],
+            save=_save,
+            load=lambda cache_dir: (cache_dir / "out.txt").read_text(),
+        )
+    )
+    def fn(value: int, scale: int = 2) -> str:
+        calls.append((value, scale))
+        return str(value * scale)
+
+    with Cache(tmp_path) as cache:
+        assert fn(3) == "6"
+        assert fn(value=3) == "6"
+        assert fn(3, scale=2) == "6"
+
+    assert calls == [(3, 2)]
+    assert cache.status([fn])[fn.__qualname__] == 1
+
+
+def test_force_recomputes_only_requested_argument_set(tmp_path: Path) -> None:
+    """Forcing A replaces A without evicting the cached result for B."""
+    calls: list[int] = []
+    call_counts = {1: 0, 2: 0}
+
+    def _save(result: str, cache_dir: Path) -> None:
+        (cache_dir / "out.txt").write_text(result)
+
+    @cacheable(  # type: ignore[untyped-decorator]
+        CacheSpec(
+            files=["out.txt"],
+            save=_save,
+            load=lambda cache_dir: (cache_dir / "out.txt").read_text(),
+        )
+    )
+    def fn(value: int) -> str:
+        calls.append(value)
+        call_counts[value] += 1
+        return f"{value}:{call_counts[value]}"
+
+    with Cache(tmp_path):
+        assert fn(1) == "1:1"
+        assert fn(2) == "2:1"
+
+    with Cache(tmp_path, force={"fn"}):
+        assert fn(1) == "1:2"
+
+    with Cache(tmp_path) as cache:
+        assert fn(1) == "1:2"
+        assert fn(2) == "2:1"
+
+    assert calls == [1, 2, 1]
+    assert cache.status([fn])[fn.__qualname__] == 2
+
+
 # ---------------------------------------------------------------------------
 # Cache.status
 # ---------------------------------------------------------------------------
 
 
-def test_status_missing_shows_false(tmp_path: Path) -> None:
+def test_status_missing_shows_zero(tmp_path: Path) -> None:
     pc = Cache(tmp_path)
     result = pc.status([Dti.estimate_dti])
-    assert result["Dti.estimate_dti"] is False
+    assert result["Dti.estimate_dti"] == 0
 
 
-def test_status_present_shows_true(dwi3: Dwi, tmp_path: Path) -> None:
+def test_status_present_shows_one(dwi3: Dwi, tmp_path: Path) -> None:
     pc = Cache(tmp_path)
     with pc:
         dwi3.estimate_dti()
     result = pc.status([Dti.estimate_dti])
-    assert result["Dti.estimate_dti"] is True
+    assert result["Dti.estimate_dti"] == 1
 
 
 def test_status_non_cacheable_skipped(tmp_path: Path) -> None:
@@ -345,13 +451,41 @@ def test_status_non_cacheable_skipped(tmp_path: Path) -> None:
 
 
 def test_status_multiple_steps(dwi3: Dwi, tmp_path: Path) -> None:
-    """status reflects which steps have been cached and which have not."""
+    """status reports the complete entry count for each cached step."""
     pc = Cache(tmp_path)
     with pc:
         dwi3.estimate_dti()
     result = pc.status([Dti.estimate_dti, Noddi.estimate_noddi])
-    assert result["Dti.estimate_dti"] is True
-    assert result["Noddi.estimate_noddi"] is False
+    assert result["Dti.estimate_dti"] == 1
+    assert result["Noddi.estimate_noddi"] == 0
+
+
+def test_status_counts_only_complete_entries(tmp_path: Path) -> None:
+    """Entries with a missing output or malformed sidecar are not counted."""
+
+    def _save(result: str, cache_dir: Path) -> None:
+        (cache_dir / "out.txt").write_text(result)
+
+    @cacheable(  # type: ignore[untyped-decorator]
+        CacheSpec(
+            files=["out.txt"],
+            save=_save,
+            load=lambda cache_dir: (cache_dir / "out.txt").read_text(),
+        )
+    )
+    def fn(value: int) -> str:
+        return str(value)
+
+    with Cache(tmp_path) as cache:
+        fn(1)
+        fn(2)
+        fn(3)
+
+    entries = sorted((tmp_path / "fn").iterdir())
+    (entries[0] / "out.txt").unlink()
+    (entries[1] / "fn.params.json").write_text("not json")
+
+    assert cache.status([fn])[fn.__qualname__] == 1
 
 
 # ---------------------------------------------------------------------------
@@ -367,8 +501,9 @@ def test_estimate_dti_with_caching(dwi3: Dwi, tmp_path: Path) -> None:
 
     assert np.allclose(dti.volume.get_affine(), dwi3.volume.get_affine())
     assert dti.volume.get_array().shape[:3] == (3, 4, 5)
-    assert (tmp_path / "estimate_dti.nii.gz").exists()
-    assert pc.status([Dti.estimate_dti])["Dti.estimate_dti"] is True
+    entry_dir = _only_cache_entry(tmp_path, "estimate_dti")
+    assert (entry_dir / "estimate_dti.nii.gz").exists()
+    assert pc.status([Dti.estimate_dti])["Dti.estimate_dti"] == 1
 
     # Second call returns the same result loaded from cache
     with pc:
@@ -429,9 +564,10 @@ def test_estimate_noddi_with_caching(dwi3: Dwi, mocker, tmp_path: Path) -> None:
     assert np.allclose(noddi.volume.get_array(), mock_ae.RESULTS["MAPs"])
     assert np.allclose(noddi.directions.get_array(), mock_ae.RESULTS["DIRs"])
     assert np.allclose(noddi.volume.get_affine(), dwi3.volume.get_affine())
-    assert (tmp_path / "estimate_noddi.nii.gz").exists()
-    assert (tmp_path / "estimate_noddi_directions.nii.gz").exists()
-    assert pc.status([Noddi.estimate_noddi])["Noddi.estimate_noddi"] is True
+    entry_dir = _only_cache_entry(tmp_path, "estimate_noddi")
+    assert (entry_dir / "estimate_noddi.nii.gz").exists()
+    assert (entry_dir / "estimate_noddi_directions.nii.gz").exists()
+    assert pc.status([Noddi.estimate_noddi])["Noddi.estimate_noddi"] == 1
 
     # Second call loads from cache — AMICO fit is not re-invoked
     mock_ae.fit.reset_mock()
@@ -514,9 +650,10 @@ def test_compute_csd_peaks_with_caching(dwi3: Dwi, mocker, tmp_path: Path) -> No
     assert np.allclose(peak_values.get_array(), mock_peaks.peak_values)
 
     # Cache files (fixed names from CacheSpec) exist and status reports cached
-    assert (tmp_path / "csd_peak_dirs.nii.gz").exists()
-    assert (tmp_path / "csd_peak_values.nii.gz").exists()
-    assert pc.status([compute_csd_peaks])["compute_csd_peaks"] is True
+    entry_dir = _only_cache_entry(tmp_path, "compute_csd_peaks")
+    assert (entry_dir / "csd_peak_dirs.nii.gz").exists()
+    assert (entry_dir / "csd_peak_values.nii.gz").exists()
+    assert pc.status([compute_csd_peaks])["compute_csd_peaks"] == 1
 
     # Second call loads from cache — peaks_from_model is not re-invoked
     mock_peaks_from_model.reset_mock()
@@ -534,10 +671,11 @@ def test_denoise_with_caching(dwi4: Dwi, tmp_path: Path) -> None:
     assert isinstance(denoised, Dwi)
     assert denoised.volume.get_array().shape == dwi4.volume.get_array().shape
     assert np.allclose(denoised.volume.get_affine(), dwi4.volume.get_affine())
-    assert (tmp_path / "denoise.nii.gz").exists()
-    assert (tmp_path / "denoise.bval").exists()
-    assert (tmp_path / "denoise.bvec").exists()
-    assert pc.status([Dwi.denoise])["Dwi.denoise"] is True
+    entry_dir = _only_cache_entry(tmp_path, "denoise")
+    assert (entry_dir / "denoise.nii.gz").exists()
+    assert (entry_dir / "denoise.bval").exists()
+    assert (entry_dir / "denoise.bvec").exists()
+    assert pc.status([Dwi.denoise])["Dwi.denoise"] == 1
 
     # Second call returns the same volume loaded from cache
     with pc:
@@ -555,7 +693,9 @@ def test_params_json_has_scalars_and_hashes(dwi3: Dwi, tmp_path: Path) -> None:
     with Cache(tmp_path):
         dwi3.estimate_dti()
 
-    params = json.loads((tmp_path / "estimate_dti.params.json").read_text())
+    entry_dir = _only_cache_entry(tmp_path, "estimate_dti")
+    params = json.loads((entry_dir / "estimate_dti.params.json").read_text())
+    assert params["version"] == 1
     # Scalar arguments (mask=None) are human-readable in the "scalars" section.
     assert "scalars" in params
     assert params["scalars"]["mask"] is None
@@ -581,6 +721,7 @@ def test_data_change_triggers_recompute(dwi3: Dwi, tmp_path: Path, mocker) -> No
         dwi3.estimate_dti()
 
     save_spy.assert_called_once()  # recomputed because the data hash changed
+    assert pc.status([Dti.estimate_dti])["Dti.estimate_dti"] == 2
 
 
 def test_untracked_param_warns(tmp_path: Path) -> None:

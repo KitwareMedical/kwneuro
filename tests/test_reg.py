@@ -25,6 +25,14 @@ from kwneuro.resource import (
 from kwneuro.structural import StructuralImage
 
 
+def _single_cache_entry(cache_root: Path, step_name: str) -> Path:
+    entries = list((cache_root / step_name).iterdir())
+    assert len(entries) == 1
+    entry = entries[0]
+    assert entry.is_dir()
+    return entry
+
+
 @pytest.fixture
 def structural() -> StructuralImage:
     return StructuralImage(volume=InMemoryVolumeResource(array=np.zeros((2, 2, 2))))
@@ -269,10 +277,11 @@ def test_register_dwi_to_structural_caches_transform_files(
     with cache:
         first = register_dwi_to_structural(dwi=dwi1, structural=structural)
 
-    cache_dir = tmp_path / "register_dwi_to_structural_transform"
+    cache_entry = _single_cache_entry(tmp_path, "register_dwi_to_structural")
+    transform_dir = cache_entry / "register_dwi_to_structural_transform"
     assert mock_reg.call_count == 1
-    assert cache.status([register_dwi_to_structural])["register_dwi_to_structural"]
-    assert json.loads((cache_dir / "transform.json").read_text()) == {
+    assert cache.status([register_dwi_to_structural])["register_dwi_to_structural"] == 1
+    assert json.loads((transform_dir / "transform.json").read_text()) == {
         "fwd": ["1Warp.nii.gz", "0GenericAffine.mat"],
         "inv": ["0GenericAffine.mat"],
     }
@@ -283,7 +292,7 @@ def test_register_dwi_to_structural_caches_transform_files(
     assert [Path(p).name for p in first._ants_inv_paths] == ["0GenericAffine.mat"]
     for path in first._ants_fwd_paths + first._ants_inv_paths:
         assert Path(path).exists()
-        assert Path(path).parent == cache_dir
+        assert Path(path).parent == transform_dir
 
     mock_reg.reset_mock()
     with cache:

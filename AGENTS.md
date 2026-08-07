@@ -317,6 +317,30 @@ with Cache(cache_dir="my_cache/sub-01", force=False) as cache:
 Each subject should use a distinct `cache_dir` to avoid collisions.
 `cache_dir` is created automatically if it does not exist.
 
+#### Cache layout
+
+Each argument combination has its own cache entry:
+
+```text
+cache_dir/
+  estimate_dti/
+    <argument-digest>/
+      estimate_dti.nii.gz
+      estimate_dti.params.json
+```
+
+The argument digest is the sha256 of canonical JSON containing the cache-format
+version, bound scalar arguments, and fingerprints of non-scalar inputs. The
+sidecar payload contains exactly the `version`, `scalars`, and `hashes` fields,
+with `version` set to `1`. Calling the same step with different arguments
+creates a sibling entry instead of overwriting an earlier result, so A, B, and
+then A again reuses the first entry. The sidecar is written last; an entry is
+complete only when it has a valid sidecar and every output declared by the cache
+protocol or `CacheSpec`.
+
+Flat cache files created by older versions are left in place but ignored. The
+first call recomputes them into the argument-keyed layout.
+
 #### The `@cacheable` decorator — two forms
 
 **Bare `@cacheable`**: use when the return type implements the cache protocol
@@ -365,8 +389,8 @@ ensuring consistency between hit and miss paths.
 
 #### Fingerprinting
 
-Each call's arguments are classified into two buckets stored in a sidecar file
-`{step_name}.params.json`:
+Each call's arguments are classified into two buckets stored in
+`cache_dir/<step-name>/<argument-digest>/<step-name>.params.json`:
 
 - **`"scalars"`** — `bool`, `int`, `float`, `str`, `None` values stored
   verbatim as human-readable JSON. Note: `None` is treated as a scalar, not
@@ -377,9 +401,11 @@ Each call's arguments are classified into two buckets stored in a sidecar file
   (recursively, field by field). This covers the full resource hierarchy (`Dwi`,
   `VolumeResource`, etc.) without those classes needing to know about caching.
 
-A mismatch in either section triggers a cache miss. Arguments of unrecognised
-types cannot be tracked and trigger a `UserWarning`; use
-`force={"step_name"}` to force recomputation when such an argument changes.
+The format version and two argument sections determine the call's argument
+digest. If no complete entry exists for that digest, the call is a cache miss;
+other argument combinations remain available. Arguments of unrecognised types
+cannot be tracked and trigger a `UserWarning`; use `force={"step_name"}` to
+force recomputation when such an argument changes.
 
 #### `force` parameter
 
@@ -390,16 +416,20 @@ Cache(cache_dir=..., force=True)  # recompute everything
 Cache(cache_dir=..., force={"estimate_noddi"})  # recompute only this step
 ```
 
+Forcing a call replaces its matching argument entry without removing entries
+for other argument combinations.
+
 #### `cache.status()`
 
 ```python
 cache.status([dwi.estimate_dti, dwi.estimate_noddi])
-# -> {"Dwi.estimate_dti": True, "Dwi.estimate_noddi": False}
+# -> {"Dwi.estimate_dti": 2, "Dwi.estimate_noddi": 0}
 ```
 
-Returns a `dict[str, bool]` mapping each step's `fn.__qualname__` to whether
-all its cached output files exist on disk. Non-decorated callables passed to
-`status()` are silently skipped.
+Returns a `dict[str, int]` mapping each step's `fn.__qualname__` to its number
+of complete cached argument entries. Incomplete entries with a missing or
+invalid sidecar or missing output are not counted. Non-decorated callables
+passed to `status()` are silently skipped.
 
 #### Thread / async safety
 

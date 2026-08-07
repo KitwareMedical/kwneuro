@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 import scipy.linalg
 
+from kwneuro.cache import Cache
 from kwneuro.dwi import Dwi
 from kwneuro.resource import (
     InMemoryBvalResource,
@@ -100,3 +101,66 @@ def test_tractseg(
     mocker_run_tract_seg.assert_called_once()
 
     assert np.allclose(seg_volume.get_array(), mock_tractseg_output)
+
+
+def test_tractseg_caches_multiple_argument_variants(
+    mocker,
+    tmp_path,
+    dwi_data_small_random,
+):
+    """Different TractSeg output types retain separate reusable results."""
+    vol = dwi_data_small_random.volume
+    vol_shape = vol.get_array().shape[:-1]
+    affine = vol.get_affine()
+    mask = InMemoryVolumeResource(array=np.ones(vol_shape), affine=affine)
+
+    peaks = (
+        InMemoryVolumeResource(array=np.ones((*vol_shape, 3, 3)), affine=affine),
+        InMemoryVolumeResource(array=np.ones((*vol_shape, 3)), affine=affine),
+    )
+    tractseg_outputs = {
+        "tract_segmentation": np.full((*vol_shape, 72), 1.0),
+        "TOM": np.full((*vol_shape, 60), 2.0),
+    }
+
+    def run_tractseg(*, data, output_type):
+        assert data.shape == (*vol_shape, 9)
+        return tractseg_outputs[output_type]
+
+    mock_run_tractseg = mocker.patch(
+        "kwneuro.tractseg._call_tractseg", side_effect=run_tractseg
+    )
+
+    with Cache(tmp_path):
+        result_a = extract_tractseg(
+            dwi_data_small_random,
+            mask,
+            output_type="tract_segmentation",
+            csd_peaks=peaks,
+        )
+        result_b = extract_tractseg(
+            dwi_data_small_random,
+            mask,
+            output_type="TOM",
+            csd_peaks=peaks,
+        )
+
+    with Cache(tmp_path):
+        cached_a = extract_tractseg(
+            dwi_data_small_random,
+            mask,
+            output_type="tract_segmentation",
+            csd_peaks=peaks,
+        )
+        cached_b = extract_tractseg(
+            dwi_data_small_random,
+            mask,
+            output_type="TOM",
+            csd_peaks=peaks,
+        )
+
+    assert mock_run_tractseg.call_count == 2
+    assert np.allclose(result_a.get_array(), tractseg_outputs["tract_segmentation"])
+    assert np.allclose(result_b.get_array(), tractseg_outputs["TOM"])
+    assert np.allclose(cached_a.get_array(), tractseg_outputs["tract_segmentation"])
+    assert np.allclose(cached_b.get_array(), tractseg_outputs["TOM"])
