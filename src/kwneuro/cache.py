@@ -24,6 +24,7 @@ _active_cache: contextvars.ContextVar[Cache | None] = contextvars.ContextVar(
 # Scalar types are stored verbatim as human-readable JSON in the params sidecar.
 # All other argument types go through content fingerprinting (see _compute_fingerprint).
 _SCALAR_TYPES = (bool, int, float, str, type(None))
+_CACHE_FORMAT_VERSION = 1
 
 
 @dataclass
@@ -35,13 +36,13 @@ class CacheSpec(Generic[T]):
     """
 
     files: list[str]
-    """Output filenames relative to the cache directory."""
+    """Output filenames relative to the current cache-entry directory."""
 
     save: Callable[[T, Path], None]
-    """Callable that persists the result to the cache directory."""
+    """Callable that persists the result to the current cache-entry directory."""
 
     load: Callable[[Path], T]
-    """Callable that reconstructs the result from the cache directory."""
+    """Callable that reconstructs the result from the current cache-entry directory."""
 
     step_name: str = ""
     """Step name used to identify this step in the params sidecar. Defaults to the decorated function name."""
@@ -60,13 +61,14 @@ class Cache:
     """Context manager that activates caching for all ``@cacheable``-decorated functions.
 
     Scalar arguments and imaging data arguments are fingerprinted automatically.
-    Changes to either trigger a cache miss on the next run. Arguments that cannot
-    be fingerprinted issue a UserWarning. Each subject should use a distinct
-    cache_dir to avoid races.
+    Each distinct argument set is stored in its own cache entry, so results from
+    multiple calls to the same function remain available. Arguments that cannot be
+    fingerprinted issue a UserWarning. Each subject should use a distinct cache_dir
+    to avoid races.
     """
 
     cache_dir: Path
-    """Directory where cached outputs and per-step sidecar files are stored. Created automatically."""
+    """Root directory containing per-step, per-invocation cache entries. Created automatically."""
 
     force: bool | set[str] = field(default=False)
     """Cache bypass control. False uses all cached outputs, True recomputes everything,
@@ -95,6 +97,15 @@ class Cache:
             return step_name in self.force
         return bool(self.force)
 
+    def _entry_dir(
+        self,
+        step_name: str,
+        scalars: dict[str, Any] | None = None,
+        hashes: dict[str, str] | None = None,
+    ) -> Path:
+        """Return the directory for one step invocation."""
+        return self.cache_dir / step_name / _compute_cache_key(scalars, hashes)
+
     def is_cached(
         self,
         step_name: str,
@@ -102,15 +113,15 @@ class Cache:
         scalars: dict[str, Any] | None = None,
         hashes: dict[str, str] | None = None,
     ) -> bool:
-        """Return True when all output files exist, the step is not forced, and the stored fingerprint matches.
+        """Return True when a complete entry exists for this step invocation.
 
-        The sidecar file stores two sections: "scalars" for human-readable scalar argument
-        values and "hashes" for sha256 content fingerprints. A mismatch in either section,
-        or a missing sidecar when params are expected, is treated as a cache miss.
+        The sidecar stores human-readable scalar arguments and sha256 content
+        fingerprints. Missing outputs, a missing or malformed sidecar, or a
+        sidecar that does not match the requested invocation is a cache miss.
 
         Args:
             step_name: Name of the cache step, used to locate the sidecar file.
-            files: Output filenames relative to cache_dir that must all exist for a cache hit.
+            files: Output filenames relative to the invocation directory that must all exist.
             scalars: Scalar argument values to compare against the stored sidecar, or None.
             hashes: Content fingerprints to compare against the stored sidecar, or None.
 
@@ -118,41 +129,40 @@ class Cache:
         """
         if self.is_forced(step_name):
             return False
-        if not all((self.cache_dir / f).exists() for f in files):
-            return False
-        if scalars or hashes:
-            params_file = self.cache_dir / f"{step_name}.params.json"
-            if not params_file.exists():
-                return False
-            try:
-                stored = json.loads(params_file.read_text(encoding="utf-8"))
-                # Compare the scalars section (human-readable parameter values).
-                if scalars and stored.get("scalars") != scalars:
-                    return False
-                # Compare the hashes section (content fingerprints for imaging data).
-                if hashes and stored.get("hashes") != hashes:
-                    return False
-            except Exception:  # pylint: disable=broad-exception-caught
-                return False
-        return True
+        entry_dir = self._entry_dir(step_name, scalars, hashes)
+        expected_params = _build_cache_params(scalars, hashes)
+        return _entry_is_complete(
+            entry_dir,
+            step_name,
+            files,
+            expected_params=expected_params,
+        )
 
-    def status(self, steps: list[Callable[..., Any]]) -> dict[str, bool]:
-        """Return a mapping of each step's qualified name to whether all its cached output files exist.
+    def status(self, steps: list[Callable[..., Any]]) -> dict[str, int]:
+        """Return the number of complete cached invocations for each step.
 
         Non-decorated callables in steps are silently skipped.
 
         Args:
             steps: List of cacheable-decorated functions to check.
 
-        Returns: Dict mapping fn.__qualname__ to True if all cached outputs exist, False otherwise.
+        Returns: Dict mapping fn.__qualname__ to its number of complete cache entries.
         """
-        result: dict[str, bool] = {}
+        result: dict[str, int] = {}
         for fn in steps:
             info: _CacheInfo | None = getattr(fn, "_cache_info", None)
             if info is None:
                 continue
             files = info.get_files(info.step_name)
-            result[fn.__qualname__] = all((self.cache_dir / f).exists() for f in files)
+            step_dir = self.cache_dir / info.step_name
+            if not step_dir.is_dir():
+                result[fn.__qualname__] = 0
+                continue
+            result[fn.__qualname__] = sum(
+                _entry_is_complete(entry_dir, info.step_name, files)
+                for entry_dir in step_dir.iterdir()
+                if entry_dir.is_dir()
+            )
         return result
 
 
@@ -349,16 +359,83 @@ def _extract_params(
     return scalars or None, hashes or None
 
 
+def _build_cache_params(
+    scalars: dict[str, Any] | None,
+    hashes: dict[str, str] | None,
+) -> dict[str, Any]:
+    """Build the canonical sidecar payload for one cached invocation."""
+    return {
+        "version": _CACHE_FORMAT_VERSION,
+        "scalars": scalars or {},
+        "hashes": hashes or {},
+    }
+
+
+def _cache_key_from_params(params: dict[str, Any]) -> str:
+    """Compute the cache-entry key for a canonical sidecar payload."""
+    encoded = json.dumps(params, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _compute_cache_key(
+    scalars: dict[str, Any] | None,
+    hashes: dict[str, str] | None,
+) -> str:
+    """Compute the cache-entry key for bound scalar values and input hashes."""
+    return _cache_key_from_params(_build_cache_params(scalars, hashes))
+
+
+def _valid_cache_params(data: Any) -> bool:
+    """Return whether data has the current cache-sidecar schema."""
+    return (
+        isinstance(data, dict)
+        and set(data) == {"version", "scalars", "hashes"}
+        and isinstance(data["version"], int)
+        and not isinstance(data["version"], bool)
+        and data["version"] == _CACHE_FORMAT_VERSION
+        and isinstance(data["scalars"], dict)
+        and isinstance(data["hashes"], dict)
+        and all(isinstance(k, str) for k in data["scalars"])
+        and all(
+            isinstance(k, str) and isinstance(v, str) for k, v in data["hashes"].items()
+        )
+    )
+
+
+def _entry_is_complete(
+    entry_dir: Path,
+    step_name: str,
+    files: list[str],
+    expected_params: dict[str, Any] | None = None,
+) -> bool:
+    """Return whether an entry has valid parameters and every declared output."""
+    if not all((entry_dir / filename).exists() for filename in files):
+        return False
+
+    params_file = entry_dir / f"{step_name}.params.json"
+    if not params_file.exists():
+        return False
+    try:
+        stored = json.loads(params_file.read_text(encoding="utf-8"))
+    except Exception:  # pylint: disable=broad-exception-caught
+        return False
+    if not _valid_cache_params(stored):
+        return False
+    if expected_params is not None and stored != expected_params:
+        return False
+    return entry_dir.name == _cache_key_from_params(stored)
+
+
 def _save_params(
     cache_dir: Path,
     step_name: str,
     scalars: dict[str, Any] | None,
     hashes: dict[str, str] | None,
 ) -> None:
-    """Write scalar params and content hashes to {step_name}.params.json.
+    """Write the canonical invocation parameters to {step_name}.params.json.
 
-    The sidecar stores two sections: "scalars" for human-readable scalar argument values
-    and "hashes" for sha256 content fingerprints. No file is written if both are empty.
+    The sidecar is written after the outputs and acts as the entry's completion
+    marker. It is created even when the decorated function has no arguments.
 
     Args:
         cache_dir: Directory where the sidecar file is written.
@@ -366,15 +443,9 @@ def _save_params(
         scalars: Scalar argument values to persist, or None.
         hashes: Content fingerprints to persist, or None.
     """
-    if not scalars and not hashes:
-        return
-    data: dict[str, Any] = {}
-    if scalars:
-        data["scalars"] = scalars
-    if hashes:
-        data["hashes"] = hashes
+    data = _build_cache_params(scalars, hashes)
     (cache_dir / f"{step_name}.params.json").write_text(
-        json.dumps(data, sort_keys=True), encoding="utf-8"
+        f"{json.dumps(data, indent=2, sort_keys=True)}\n", encoding="utf-8"
     )
 
 
@@ -382,8 +453,9 @@ def cacheable(fn_or_spec: Callable[..., Any] | CacheSpec[Any]) -> Any:
     """Decorator that adds transparent caching when a Cache context is active.
 
     Outside a ``with Cache(...)`` block the function runs normally with no overhead.
-    Scalar and dataclass arguments are fingerprinted automatically; a change in either
-    causes a cache miss. Arguments that cannot be fingerprinted trigger a UserWarning.
+    Scalar and dataclass arguments are fingerprinted automatically. Each distinct
+    argument set gets its own cache entry. Arguments that cannot be fingerprinted
+    trigger a UserWarning.
 
     Can be used in two ways. As a bare decorator when the return type implements
     the cache protocol (_cache_files, _cache_save, _cache_load)::
@@ -414,14 +486,17 @@ def cacheable(fn_or_spec: Callable[..., Any] | CacheSpec[Any]) -> Any:
                     return fn(*args, **kwargs)
                 # Classify arguments into scalars and content hashes.
                 scalars, hashes = _extract_params(fn, args, kwargs)
+                entry_dir = cache._entry_dir(step_name, scalars, hashes)
                 if cache.is_cached(step_name, spec.files, scalars, hashes):
                     # All output files exist and the fingerprint matches — load from disk.
-                    return spec.load(cache.cache_dir)
+                    return spec.load(entry_dir)
                 # Cache miss: run the function, persist the outputs, save the fingerprint.
                 result = fn(*args, **kwargs)
-                spec.save(result, cache.cache_dir)
-                _save_params(cache.cache_dir, step_name, scalars, hashes)
-                return spec.load(cache.cache_dir)
+                entry_dir.mkdir(parents=True, exist_ok=True)
+                (entry_dir / f"{step_name}.params.json").unlink(missing_ok=True)
+                spec.save(result, entry_dir)
+                _save_params(entry_dir, step_name, scalars, hashes)
+                return spec.load(entry_dir)
 
             _wrapper._cache_info = _CacheInfo(  # type: ignore[attr-defined]
                 step_name=step_name,
@@ -464,15 +539,18 @@ def cacheable(fn_or_spec: Callable[..., Any] | CacheSpec[Any]) -> Any:
         rt = _get_return_type()
         # Classify arguments into scalars and content hashes.
         scalars, hashes = _extract_params(fn, args, kwargs)
+        entry_dir = cache._entry_dir(step_name, scalars, hashes)
         files = rt._cache_files(step_name)
         if cache.is_cached(step_name, files, scalars, hashes):
             # All output files exist and the fingerprint matches — load from disk.
-            return rt._cache_load(cache.cache_dir, step_name)
+            return rt._cache_load(entry_dir, step_name)
         # Cache miss: run the function, persist the output, save the fingerprint.
         result = fn(*args, **kwargs)
-        result._cache_save(cache.cache_dir, step_name)
-        _save_params(cache.cache_dir, step_name, scalars, hashes)
-        return rt._cache_load(cache.cache_dir, step_name)
+        entry_dir.mkdir(parents=True, exist_ok=True)
+        (entry_dir / f"{step_name}.params.json").unlink(missing_ok=True)
+        result._cache_save(entry_dir, step_name)
+        _save_params(entry_dir, step_name, scalars, hashes)
+        return rt._cache_load(entry_dir, step_name)
 
     _wrapper._cache_info = _CacheInfo(  # type: ignore[attr-defined]
         step_name=step_name,

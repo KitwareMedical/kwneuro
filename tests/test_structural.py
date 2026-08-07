@@ -61,6 +61,14 @@ def mock_ants_vol(structural: StructuralImage):
     )
 
 
+def _single_cache_entry(cache_root: Path, step_name: str) -> Path:
+    entries = list((cache_root / step_name).iterdir())
+    assert len(entries) == 1
+    entry = entries[0]
+    assert entry.is_dir()
+    return entry
+
+
 # ---------------------------------------------------------------------------
 # Save / load
 # ---------------------------------------------------------------------------
@@ -142,7 +150,8 @@ def test_correct_bias_caching(
     with Cache(tmp_path):
         structural.correct_bias()
     assert mock_n4.call_count == 1
-    assert (tmp_path / "correct_bias.nii.gz").exists()
+    cache_entry = _single_cache_entry(tmp_path, "correct_bias")
+    assert (cache_entry / "correct_bias.nii.gz").exists()
 
     mock_n4.reset_mock()
     with Cache(tmp_path):
@@ -276,7 +285,8 @@ def test_segment_tissues_caching(
     with Cache(tmp_path):
         structural.segment_tissues(method="atropos")
     assert mock_atropos.call_count == 1
-    assert (tmp_path / "segment_tissues.nii.gz").exists()
+    cache_entry = _single_cache_entry(tmp_path, "segment_tissues")
+    assert (cache_entry / "segment_tissues.nii.gz").exists()
 
     mock_atropos.reset_mock()
     with Cache(tmp_path):
@@ -307,7 +317,8 @@ def test_segment_tissues_caching_writes_method_param(
     with Cache(tmp_path):
         structural.segment_tissues(method="atropos")
 
-    params = json.loads((tmp_path / "segment_tissues.params.json").read_text())
+    cache_entry = _single_cache_entry(tmp_path, "segment_tissues")
+    params = json.loads((cache_entry / "segment_tissues.params.json").read_text())
     assert params["scalars"]["method"] == "atropos"
 
 
@@ -371,7 +382,8 @@ def test_parcellate_caching(
     with Cache(tmp_path):
         structural.parcellate(method="dkt")
     assert mock_antspynet.desikan_killiany_tourville_labeling.call_count == 1
-    assert (tmp_path / "parcellate.nii.gz").exists()
+    cache_entry = _single_cache_entry(tmp_path, "parcellate")
+    assert (cache_entry / "parcellate.nii.gz").exists()
 
     mock_antspynet.desikan_killiany_tourville_labeling.reset_mock()
     mocker.patch.dict(sys.modules, {"antspynet": mock_antspynet})
