@@ -60,10 +60,12 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
+from kwneuro.cache import Cache
 from kwneuro.dwi import Dwi
 from kwneuro.io import FslBvalResource, FslBvecResource, NiftiVolumeResource
 
 data_dir = Path(data_dir)
+cache_dir = Path("~/.cache/kwneuro").expanduser()
 
 dwi = Dwi(
     NiftiVolumeResource(data_dir / f"{basename}.nii.gz"),
@@ -112,7 +114,8 @@ plt.show()
 # unchanged).
 
 # %% tags=["remove-output"]
-dwi_denoised = dwi.denoise()
+with Cache(cache_dir):
+    dwi_denoised = dwi.denoise()
 
 # %%
 orig = vol[:, :, mid_slice, dwi_large_bval_idx]
@@ -138,7 +141,8 @@ plt.show()
 # b=0 image. The mask is returned as a `VolumeResource`.
 
 # %% tags=["remove-output"]
-mask = dwi_denoised.extract_brain()
+with Cache(cache_dir):
+    mask = dwi_denoised.extract_brain()
 
 # %% tags=["remove-cell"]
 # (This cell fixes a few notebook output issues caused by the HD-BET masking step above)
@@ -175,7 +179,8 @@ plt.show()
 # - **Eigenvalues / eigenvectors** — full tensor decomposition
 
 # %%
-dti = dwi_denoised.estimate_dti(mask=mask)
+with Cache(cache_dir):
+    dti = dwi_denoised.estimate_dti(mask=mask)
 fa_vol, md_vol = dti.get_fa_md()
 
 # %%
@@ -232,7 +237,8 @@ plt.show()
 # - **FWF** — free water fraction
 
 # %% tags=["remove-output"]
-noddi = dwi_denoised.estimate_noddi(mask=mask) # array shape (x, y, z, 3)
+with Cache(cache_dir):
+    noddi = dwi_denoised.estimate_noddi(mask=mask) # array shape (x, y, z, 3)
 
 # %%
 fig, axes = plt.subplots(1, 3, figsize=(14, 4))
@@ -257,8 +263,11 @@ plt.show()
 # %%
 from kwneuro.csd import compute_csd_peaks, estimate_response_function
 
-response = estimate_response_function(dwi_denoised, mask)
-peak_dirs, peak_values = compute_csd_peaks(dwi_denoised, mask, response)
+with Cache(cache_dir):
+    response = estimate_response_function(dwi_denoised, mask)
+
+with Cache(cache_dir):
+    peak_dirs, peak_values = compute_csd_peaks(dwi_denoised, mask, response)
 
 # %%
 peak_dirs_arr = peak_dirs.get_array()  # (x, y, z, n_peaks, 3)
@@ -286,7 +295,8 @@ plt.show()
 # %% tags=["remove-output"]
 from kwneuro.tractseg import extract_tractseg
 
-tracts = extract_tractseg(dwi_denoised, mask, response, output_type="tract_segmentation")
+with Cache(cache_dir):
+    tracts = extract_tractseg(dwi_denoised, mask, response, output_type="tract_segmentation")
 
 # %% tags=["remove-cell"]
 # The tractseg step above changes this; we need to change it back for notebook plotting:
@@ -370,15 +380,16 @@ print(f"Results saved to {output_dir.resolve()}")
 #   rerun a specific step or all steps regardless of cache state.
 
 # %% tags=["remove-output"]
-from kwneuro.cache import Cache
 from kwneuro.dti import Dti
 from kwneuro.noddi import Noddi
 
-cache_dir = Path("cache")
+with Cache(cache_dir):
+    dti = dwi_denoised.estimate_dti(mask=mask)
+
+with Cache(cache_dir):
+    noddi = dwi_denoised.estimate_noddi(mask=mask)
 
 with Cache(cache_dir) as pc:
-    dti = dwi_denoised.estimate_dti(mask=mask)
-    noddi = dwi_denoised.estimate_noddi(mask=mask)
     _, peaks = compute_csd_peaks(dwi_denoised, mask, response)
 
 # %%

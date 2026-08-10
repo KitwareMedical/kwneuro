@@ -32,6 +32,7 @@ from tempfile import TemporaryDirectory
 import nibabel as nib
 import numpy as np
 
+from kwneuro.cache import Cache
 from kwneuro.dwi import Dwi
 from kwneuro.files import read_dwi_fsl, write_dwi_fsl, write_volume
 from kwneuro.resource import (
@@ -82,6 +83,7 @@ def make_synthetic_dwi() -> Dwi:
 
 tmpdir = TemporaryDirectory()
 work_dir = Path(tmpdir.name)
+cache_dir = Path("~/.cache/kwneuro").expanduser()
 input_dwi_path = work_dir / "sub-01_dwi.nii.gz"
 
 write_dwi_fsl(make_synthetic_dwi(), input_dwi_path)
@@ -96,7 +98,8 @@ print(f"Wrote example inputs under {work_dir}")
 
 # %%
 dwi = read_dwi_fsl(input_dwi_path)
-dti = dwi.estimate_dti()
+with Cache(cache_dir):
+    dti = dwi.load().estimate_dti()
 fa, md = dti.get_fa_md()
 
 print(f"DWI shape: {dwi.volume.get_array().shape}")

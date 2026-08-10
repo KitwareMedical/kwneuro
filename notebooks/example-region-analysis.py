@@ -76,10 +76,13 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 
+from kwneuro.cache import Cache
 from kwneuro.dwi import Dwi
 from kwneuro.io import FslBvalResource, FslBvecResource, NiftiVolumeResource
 from kwneuro.reg import register_dwi_to_structural
 from kwneuro.structural import StructuralImage
+
+cache_dir = Path("~/.cache/kwneuro").expanduser()
 
 structural = StructuralImage(NiftiVolumeResource(t1_path)).load()
 
@@ -103,7 +106,8 @@ print(f"T1 shape: {struct_image.shape}")
 # N4 bias field correction before downstream structural processing.
 
 # %% tags=["remove-output"]
-structural_bc = structural.correct_bias()
+with Cache(cache_dir):
+    structural_bc = structural.correct_bias()
 
 # %%
 t1_bc = structural_bc.volume.get_array()
@@ -181,7 +185,8 @@ plt.show()
 #   Requires `pip install kwneuro[antspynet]`.
 
 # %% tags=["remove-output"]
-t1_mask = structural_bc.extract_brain()
+with Cache(cache_dir):
+    t1_mask = structural_bc.extract_brain()
 
 # %% tags=["remove-cell"]
 # (This cell fixes a few notebook output issues caused by the HD-BET masking step above)
@@ -204,8 +209,11 @@ for gpu in tf.config.list_physical_devices("GPU"):
     tf.config.experimental.set_memory_growth(gpu, True)
 
 # %%
-segmentation = structural_bc.segment_tissues(mask=t1_mask)
-segmentation_deep = structural_bc.segment_tissues(method="deep_atropos")
+with Cache(cache_dir):
+    segmentation = structural_bc.segment_tissues(mask=t1_mask)
+
+with Cache(cache_dir):
+    segmentation_deep = structural_bc.segment_tissues(method="deep_atropos")
 
 seg_arr = segmentation.get_array()
 seg_deep_arr = segmentation_deep.get_array()
@@ -264,7 +272,8 @@ gc.collect()
 # > (~8 GB free) to run the deep-learning model on a full-resolution T1.
 
 # %% tags=["remove-output"]
-parcellation = structural_bc.parcellate(method="dkt")
+with Cache(cache_dir):
+    parcellation = structural_bc.parcellate(method="dkt")
 
 # %%
 parc_arr = parcellation.get_array()
@@ -308,10 +317,12 @@ gc.collect()
 # denoising, HD-BET brain extraction, and DIPY TensorModel fitting.
 
 # %% tags=["remove-output"]
-dwi_denoised = dwi.denoise()
+with Cache(cache_dir):
+    dwi_denoised = dwi.denoise()
 
 # %% tags=["remove-output"]
-dwi_mask = dwi_denoised.extract_brain()
+with Cache(cache_dir):
+    dwi_mask = dwi_denoised.extract_brain()
 
 # %% tags=["remove-cell"]
 # (This cell fixes a few notebook output issues caused by the HD-BET masking step above)
@@ -328,7 +339,8 @@ import torch
 torch.cuda.empty_cache()  # release HD-BET GPU memory before DTI estimation
 
 # %%
-dti = dwi_denoised.estimate_dti(mask=dwi_mask)
+with Cache(cache_dir):
+    dti = dwi_denoised.estimate_dti(mask=dwi_mask)
 fa_vol, md_vol = dti.get_fa_md()
 fa = fa_vol.get_array()
 md = md_vol.get_array()
@@ -358,13 +370,14 @@ plt.show()
 # as well as minor inter-sequence head motion.
 
 # %% tags=["remove-output"]
-transform = register_dwi_to_structural(
-    dwi=dwi_denoised,
-    structural=structural_bc,
-    type_of_transform="SyN",
-    dwi_mask=dwi_mask,
-    structural_mask=t1_mask,
-)
+with Cache(cache_dir):
+    transform = register_dwi_to_structural(
+        dwi=dwi_denoised,
+        structural=structural_bc,
+        type_of_transform="SyN",
+        dwi_mask=dwi_mask,
+        structural_mask=t1_mask,
+    )
 
 # %%
 # Verify registration quality: warp the mean b=0 forward into T1 space

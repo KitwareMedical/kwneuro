@@ -73,12 +73,13 @@ else:
 # %% tags=["remove-output"]
 import matplotlib.pyplot as plt
 import numpy as np
-import tempfile
 
+from kwneuro.cache import Cache, CacheSpec, cacheable
 from kwneuro.dwi import Dwi
 from kwneuro.io import FslBvalResource, FslBvecResource, NiftiVolumeResource
-from kwneuro.masks import brain_extract_dwi_batch
 from kwneuro.resource import VolumeResource
+
+cache_dir = Path("~/.cache/kwneuro").expanduser()
 
 # Load all DWIs from the downloaded data
 dwis: list[Dwi] = []
@@ -101,18 +102,18 @@ if SUBSAMPLE:
     dwis = [subsample_dwi(d, SUBSAMPLE_FACTOR) for d in dwis]
     print(f"Subsampled by factor {SUBSAMPLE_FACTOR}")
 
-# Brain extraction in one batch (HD-BET initializes once)
-with tempfile.TemporaryDirectory() as tmpdir:
-    cases = [(dwi, Path(tmpdir) / f"mask_{i}.nii.gz") for i, dwi in enumerate(dwis)]
-    # Load masks into memory before the temp directory is cleaned up
-    masks = [m.load() for m in brain_extract_dwi_batch(cases)]
+masks = []
+for dwi in dwis:
+    with Cache(cache_dir):
+        masks.append(dwi.extract_brain())
 
 # Estimate DTI and extract FA/MD
 fa_volumes: list[VolumeResource] = []
 md_volumes: list[VolumeResource] = []
 
 for dwi, mask in zip(dwis, masks):
-    dti = dwi.estimate_dti(mask=mask)
+    with Cache(cache_dir):
+        dti = dwi.estimate_dti(mask=mask)
     fa_vol, md_vol = dti.get_fa_md()
     fa_volumes.append(fa_vol)
     md_volumes.append(md_vol)
@@ -178,13 +179,19 @@ plt.show()
 # %%
 from kwneuro.build_template import average_volumes, build_template
 
-initial_avg = average_volumes(fa_volumes)
+average_volumes = cacheable(average_volumes)
+build_template = cacheable(build_template)
+
+with Cache(cache_dir):
+    initial_avg = average_volumes(fa_volumes)
 
 # %% tags=["remove-output"]
-fa_template_1it = build_template(fa_volumes, initial_template=initial_avg, iterations=1)
+with Cache(cache_dir):
+    fa_template_1it = build_template(fa_volumes, initial_template=initial_avg, iterations=1)
 
 # %% tags=["remove-output"]
-fa_template_4it = build_template(fa_volumes, initial_template=fa_template_1it, iterations=3)
+with Cache(cache_dir):
+    fa_template_4it = build_template(fa_volumes, initial_template=fa_template_1it, iterations=3)
 
 # %% [markdown]
 # Compare the naive average with the registration-based template.
@@ -219,24 +226,40 @@ plt.show()
 # %%
 from kwneuro.build_template import build_multi_metric_template
 
+build_multi_metric_template = cacheable(
+    CacheSpec(
+        files=["FA.nii.gz", "MD.nii.gz"],
+        save=lambda result, path: [
+            NiftiVolumeResource.save(result[name], path / f"{name}.nii.gz")
+            for name in ("FA", "MD")
+        ],
+        load=lambda path: {
+            name: NiftiVolumeResource(path / f"{name}.nii.gz")
+            for name in ("FA", "MD")
+        },
+    )
+)(build_multi_metric_template)
+
 subject_list = []
 for fa, md in zip(fa_volumes, md_volumes):
     subject_list.append({"FA": fa, "MD": md})
 
 # %% tags=["remove-output"]
-multi_template_1it = build_multi_metric_template(
-    subject_list,
-    weights={"FA": 1.0, "MD": 1.0},
-    iterations=1,
-)
+with Cache(cache_dir):
+    multi_template_1it = build_multi_metric_template(
+        subject_list,
+        weights={"FA": 1.0, "MD": 1.0},
+        iterations=1,
+    )
 
 # %% tags=["remove-output"]
-multi_template_4it = build_multi_metric_template(
-    subject_list,
-    weights={"FA": 1.0, "MD": 1.0},
-    iterations=3,
-    initial_template=multi_template_1it,
-)
+with Cache(cache_dir):
+    multi_template_4it = build_multi_metric_template(
+        subject_list,
+        weights={"FA": 1.0, "MD": 1.0},
+        iterations=3,
+        initial_template=multi_template_1it,
+    )
 
 # %% [markdown]
 # Visualise the multi-metric template for each modality.
