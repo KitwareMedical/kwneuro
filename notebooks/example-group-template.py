@@ -6,7 +6,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.19.1
+#       jupytext_version: 1.19.5
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -48,7 +48,7 @@ DATA_DIR = Path("example_data/ds000221")
 SUBJECTS = ["sub-010002", "sub-010005", "sub-010006"]
 
 # Download if not already present
-if not DATA_DIR.exists() or not any(DATA_DIR.iterdir()):
+if not DATA_DIR.exists() or not all((DATA_DIR / s).exists() for s in SUBJECTS):
     print("Downloading example data from OpenNeuro ds000221...")
     print("This may take a few minutes (~250 MB total).")
     on.download(
