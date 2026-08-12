@@ -353,10 +353,9 @@ plt.show()
 # %% [markdown]
 # ## Register DWI to T1 space (rigid body)
 #
-# A rigid-body transform aligns the mean b=0 image to the T1.
-# A rigid transform is appropriate here because the DWI and T1 were
-# acquired in the same session, so we only need to correct for minor inter-sequence
-# head motion.
+# A non-linear transform aligns the mean b=0 image to the T1.
+# Non-linear registration is used here to account for gradient-induced distortions
+# as well as minor inter-sequence head motion.
 
 # %% tags=["remove-output"]
 transform = register_dwi_to_structural(
