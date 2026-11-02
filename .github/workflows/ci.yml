@@ -24,7 +24,7 @@ jobs:
           fetch-depth: 0
       - uses: astral-sh/setup-uv@v7
         with:
-          python-version: "3"
+          python-version: "3.13"
       - name: Run pre-commit
         run:
           uv run --extra dev pre-commit run --all-files --show-diff-on-failure
